@@ -1,0 +1,74 @@
+version: "2"
+
+# Baseline linter set. Modernize runs as a separate gate; this file covers the
+# golangci-lint-bundled linters only.
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - bodyclose
+    - bidichk
+    - canonicalheader
+    - durationcheck
+    - errchkjson
+    - errorlint
+    - fatcontext
+    - gocheckcompilerdirectives
+    - godoclint
+    - godot
+    - gosec
+    - makezero
+    - misspell # locale-neutral: flags only unambiguous typos, not en-US/en-GB
+    - nilnesserr
+    - noctx
+    - nolintlint
+    - nosprintfhostport
+    - reassign
+    - lll
+    - wastedassign
+  settings:
+    godoclint:
+      default: basic # pkg-doc, single-pkg-doc, start-with-name, deprecated
+      enable:
+        - max-len
+        - require-doc
+        - require-pkg-doc
+      options:
+        max-len:
+          # The rule measures godoc content without the leading `// `.
+          length: 77
+    lll:
+      line-length: 120
+      tab-width: 1
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    staticcheck:
+      # ST1020/21/22 (doc-comment form) are godoclint's job; avoid double reports.
+      checks:
+        - all
+        - -ST1020
+        - -ST1021
+        - -ST1022
+  exclusions:
+    rules:
+      # Test functions are exported by convention but never godoc'd.
+      - path: _test\.go
+        linters:
+          - godoclint
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/tantosec/tturl
+
+# Report every finding. golangci-lint's defaults (max-issues-per-linter: 50,
+# max-same-issues: 3) silently truncate, and uniq-by-line hides a finding when
+# another on the same line is reported first (e.g. lll masked behind gosec).
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  uniq-by-line: false

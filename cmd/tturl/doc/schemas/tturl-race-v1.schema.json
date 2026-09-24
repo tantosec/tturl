@@ -1,0 +1,678 @@
+{
+  "title": "tturl race JSON Lines record",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/run"
+    },
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/warmup"
+    },
+    {
+      "$ref": "#/$defs/trial"
+    },
+    {
+      "$ref": "#/$defs/result"
+    }
+  ],
+  "$defs": {
+    "request": {
+      "allOf": [
+        {
+          "$ref": "tturl-common-v1.schema.json#/$defs/request"
+        },
+        {
+          "type": "object",
+          "required": [
+            "role"
+          ],
+          "properties": {
+            "role": {
+              "enum": [
+                "measured",
+                "warmup"
+              ]
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "acquisition": {
+      "allOf": [
+        {
+          "$ref": "tturl-common-v1.schema.json#/$defs/acquisition"
+        },
+        {
+          "type": "object",
+          "required": [
+            "capture"
+          ],
+          "properties": {
+            "capture": {
+              "$ref": "tturl-common-v1.schema.json#/$defs/capture"
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false,
+      "description": "Resolved live transport, execution and receive controls, independent of assignment and inference."
+    },
+    "run": {
+      "allOf": [
+        {
+          "$ref": "tturl-common-v1.schema.json#/$defs/run_envelope"
+        },
+        {
+          "type": "object",
+          "required": [
+            "schema",
+            "command",
+            "argv",
+            "plan",
+            "acquisition"
+          ],
+          "properties": {
+            "schema": {
+              "const": "tturl.race/v1"
+            },
+            "command": {
+              "const": "race"
+            },
+            "argv": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "prefixItems": [
+                {
+                  "const": "race"
+                }
+              ]
+            },
+            "plan": {
+              "$ref": "#/$defs/plan"
+            },
+            "acquisition": {
+              "$ref": "#/$defs/acquisition"
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "acquisition": {
+                "properties": {
+                  "delivery": {
+                    "properties": {
+                      "selection": {
+                        "properties": {
+                          "state": {
+                            "const": "skipped_single_trial"
+                          }
+                        },
+                        "required": [
+                          "state"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "plan": {
+                "properties": {
+                  "work": {
+                    "properties": {
+                      "planned_trials": {
+                        "const": 1
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "plan": {
+      "type": "object",
+      "required": [
+        "work",
+        "batch_width",
+        "warmup",
+        "arrangement",
+        "padding",
+        "extractors"
+      ],
+      "properties": {
+        "work": {
+          "type": "object",
+          "required": [
+            "requested_trials",
+            "planned_trials"
+          ],
+          "properties": {
+            "requested_trials": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1
+            },
+            "planned_trials": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "batch_width": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "warmup": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/warmup"
+        },
+        "arrangement": {
+          "enum": [
+            "none",
+            "random",
+            "rotate"
+          ]
+        },
+        "padding": {
+          "type": "array",
+          "items": {
+            "$ref": "tturl-common-v1.schema.json#/$defs/padding"
+          }
+        },
+        "extractors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/extractor"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "description": "Requested work and resolved experimental assignment; execution records what was attempted."
+    },
+    "extractor": {
+      "type": "object",
+      "required": [
+        "extractor_id",
+        "pattern",
+        "selection",
+        "fields"
+      ],
+      "properties": {
+        "extractor_id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pattern": {
+          "type": "string"
+        },
+        "selection": {
+          "enum": [
+            "whole_match",
+            "named_groups"
+          ]
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false,
+      "description": "Run-scoped dense extractor identity and resolved matching configuration."
+    },
+    "extract_capture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "participated",
+        "offset",
+        "encoding",
+        "data"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "participated": {
+          "type": "boolean"
+        },
+        "offset": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "tturl-common-v1.schema.json#/$defs/offset"
+            }
+          ]
+        },
+        "encoding": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "utf-8",
+            "base64",
+            null
+          ]
+        },
+        "data": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "participated": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "offset": {
+                "$ref": "tturl-common-v1.schema.json#/$defs/offset"
+              },
+              "encoding": {
+                "enum": [
+                  "utf-8",
+                  "base64"
+                ]
+              },
+              "data": {
+                "type": "string"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "offset": {
+                "const": null
+              },
+              "encoding": {
+                "const": null
+              },
+              "data": {
+                "const": null
+              }
+            }
+          }
+        }
+      ],
+      "description": "One named capture and its participation, half-open byte offset and explicitly encoded data."
+    },
+    "extract_whole_match": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "offset",
+        "encoding",
+        "data",
+        "captures"
+      ],
+      "properties": {
+        "offset": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/offset"
+        },
+        "encoding": {
+          "enum": [
+            "utf-8",
+            "base64"
+          ]
+        },
+        "data": {
+          "type": "string"
+        },
+        "captures": {
+          "type": "array",
+          "maxItems": 0
+        }
+      },
+      "description": "One whole match with half-open byte offsets and named captures."
+    },
+    "extract_named_match": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "offset",
+        "encoding",
+        "data",
+        "captures"
+      ],
+      "properties": {
+        "offset": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/offset"
+        },
+        "encoding": {
+          "const": null
+        },
+        "data": {
+          "const": null
+        },
+        "captures": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/extract_capture"
+          }
+        }
+      },
+      "description": "One selected named match with half-open byte offsets and named captures."
+    },
+    "extract": {
+      "type": "object",
+      "required": [
+        "extractor_id",
+        "complete",
+        "matches"
+      ],
+      "properties": {
+        "extractor_id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "matches": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/extract_whole_match"
+              },
+              {
+                "$ref": "#/$defs/extract_named_match"
+              }
+            ]
+          }
+        }
+      },
+      "additionalProperties": false,
+      "description": "Derived matches from the retained response prefix, joined through extractor_id; complete concerns search coverage of accepted bytes."
+    },
+    "response": {
+      "allOf": [
+        {
+          "$ref": "tturl-common-v1.schema.json#/$defs/response"
+        },
+        {
+          "type": "object",
+          "required": [
+            "extracts"
+          ],
+          "properties": {
+            "extracts": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/extract"
+              }
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "outcome": {
+      "allOf": [
+        {
+          "$ref": "tturl-common-v1.schema.json#/$defs/outcome"
+        },
+        {
+          "type": "object",
+          "required": [
+            "response"
+          ],
+          "properties": {
+            "response": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/$defs/response"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false,
+      "description": "One outbound position and global request ID; rank, response and stream facts may be unobserved. Outcomes increase by global request ID."
+    },
+    "warmup": {
+      "type": "object",
+      "required": [
+        "kind",
+        "connection_id",
+        "dispatch",
+        "failure",
+        "outcomes"
+      ],
+      "properties": {
+        "kind": {
+          "const": "warmup"
+        },
+        "connection_id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "dispatch": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/dispatch_times"
+        },
+        "failure": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "tturl-common-v1.schema.json#/$defs/failure"
+            }
+          ]
+        },
+        "outcomes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/outcome"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "description": "Resolved connection-local priming trial count and active batch width; disabled priming has width zero."
+    },
+    "trial": {
+      "type": "object",
+      "required": [
+        "kind",
+        "connection_id",
+        "dispatch",
+        "failure",
+        "outcomes",
+        "trial_index",
+        "cycle",
+        "shift"
+      ],
+      "properties": {
+        "kind": {
+          "const": "trial"
+        },
+        "connection_id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "dispatch": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/dispatch_times"
+        },
+        "failure": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "tturl-common-v1.schema.json#/$defs/failure"
+            }
+          ]
+        },
+        "outcomes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/outcome"
+          }
+        },
+        "trial_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cycle": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "shift": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "description": "One measured batch attempt with explicit coordinates; completion order may differ from trial_index order."
+    },
+    "execution_trials": {
+      "type": "object",
+      "required": [
+        "maximum",
+        "attempted",
+        "rank_complete",
+        "incomplete",
+        "unattempted"
+      ],
+      "properties": {
+        "maximum": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "attempted": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rank_complete": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "incomplete": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unattempted": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "description": "Measured trial attempts. Attempted equals rank_complete plus incomplete; bounded work equals attempted plus unattempted. Retained evidence excludes method-ineligible rank-complete trials where applicable."
+    },
+    "execution": {
+      "type": "object",
+      "required": [
+        "connections",
+        "priming",
+        "request_operations",
+        "trials"
+      ],
+      "properties": {
+        "connections": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/execution_connections"
+        },
+        "priming": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/execution_priming"
+        },
+        "request_operations": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/execution_request_operations"
+        },
+        "trials": {
+          "$ref": "#/$defs/execution_trials"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Observed accounting for connections, priming and measured work, with distinct attempted, rank-complete and retained populations."
+    },
+    "result": {
+      "type": "object",
+      "required": [
+        "kind",
+        "completion",
+        "execution",
+        "aggregates"
+      ],
+      "properties": {
+        "kind": {
+          "const": "result"
+        },
+        "completion": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/completion"
+        },
+        "execution": {
+          "$ref": "#/$defs/execution"
+        },
+        "aggregates": {
+          "type": "object",
+          "required": [
+            "reset_counts"
+          ],
+          "properties": {
+            "reset_counts": {
+              "type": "array",
+              "items": {
+                "$ref": "tturl-common-v1.schema.json#/$defs/reset_count"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "description": "Terminal acquisition completion and observed execution, plus command-owned aggregates or inference."
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/tantosec/tturl/main/cmd/tturl/doc/schemas/tturl-race-v1.schema.json"
+}

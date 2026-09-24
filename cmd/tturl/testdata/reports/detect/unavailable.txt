@@ -1,0 +1,55 @@
+================================================================================
+                                  tturl detect
+================================================================================
+
+----------------------------------- Requests -----------------------------------
+
+Target: https://example.test
+
+  control    GET  /request/0
+  candidate  GET  /request/1
+
+Total: 2 requests.
+
+---------------------------------- Experiment ----------------------------------
+
+Search: late arrival-order outlier among 2 candidates; effective width 2.
+Strategy: requested auto; resolved peer-first; solver method
+          "ranking/outlier/peer-first-bounded-betting/v1beta1".
+Scheduling: up to 1 in-flight comparison.
+Evidence updates: complete atomic waves.
+Dependence: arbitrary within an atomic wave.
+Baselines: none.
+Risk bounds: false-positive 1.0%; false-negative 5.0%.
+Negative boundary: minimum normalised-rank edge 0.02.
+Budget: up to 100 adaptive comparisons (200 measured request participations).
+Priming: none; early comparisons per connection may include cold-state effects.
+Pacing: batch-rate ceiling unlimited; request-rate ceiling unlimited; minimum
+        batch-start interval unconstrained.
+Connections: up to 1 active (default).
+Streams: honour the peer's advertised concurrent-stream limit.
+Response limits: 8MiB accepted body per stream; 30s transport time per batch.
+Run timeout: unlimited for live request execution.
+
+------------------------------- Detection result -------------------------------
+
+Decision unavailable: the adaptive search failed before producing a decision.
+Reason: connection closed during adaptive comparison
+No statistical guarantee was produced.
+
+Exploratory candidate means (adaptive samples are not directly comparable):
+  request    mean rank  samples
+  control         0.00        1
+  candidate       1.00        1
+
+----------------------------- HTTP status outcomes -----------------------------
+
+HTTP 204 for all 2 request participations.
+
+---------------------------------- Execution -----------------------------------
+
+Comparisons: 1 attempted; 1 rank-complete; 0 incomplete; maximum 100.
+Measured request operations: 2 attempted; 2 rank-complete; 2 retained.
+Connections: 1 planned; 1 observed; 0 replacements.
+Completion: failed.
+Error: connection closed during adaptive comparison

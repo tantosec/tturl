@@ -1,0 +1,113 @@
+tturl race, tturl measure, tturl analyse, and tturl detect use the same
+curl-like grammar to describe requests. tturl resolves those descriptions into
+concrete requests before request collection begins. The Requests section lets
+you inspect the result.
+
+## Make the comparison visible
+
+For a comparison, put each deliberately different request in a named block:
+
+  tturl race -k \
+    --block 'https://127.0.0.1:8443/sleep?duration=100us' --name fast \
+    --block 'https://127.0.0.1:8443/sleep?duration=5000us' --name slow
+
+Arguments before the first '--block' form the preamble. It holds command-wide
+options and the request baseline inherited by every block. Put shared headers,
+credentials and request bodies there. Blocks change or extend what differs.
+
+Without '--block', the preamble becomes one implicit block. Use that shorter
+form when the same request options should apply to every URL. Read tturl help
+blocks for the precise inheritance and option-placement rules.
+
+## Know what curl-like means
+
+tturl borrows a focused request grammar from curl. It does not proxy requests,
+follow redirects, decompress responses, expand curl URL globs, retain cookie
+jars or perform challenge-response
+authentication. Each request command's '-h' screen lists its complete supported
+flag set; do not assume other curl behaviour.
+
+tturl does not add an Accept-Encoding header. If you add one and the peer
+returns encoded content, tturl counts and hashes the encoded bytes it receives.
+Capture retains and extracts only the configured prefix of those bytes.
+
+## Expand deliberately
+
+Before repetition, a block contributes one request for each URL. A '--vary' fan
+instead requires one URL and contributes one request for each value or
+combination. '--repeat' N makes N identical copies of every resulting request.
+Two bindings with three and two values produce six clusterbomb variants or two
+pitchfork variants; repetition multiplies each. A two-value fan repeated twice
+therefore contributes four requests:
+
+  tturl race -k --vary 'DELAY={100us,5000us}' --repeat 2 \
+    'https://127.0.0.1:8443/sleep?duration=DELAY'
+
+tturl limits each variation source to 100,000 values and the Cartesian product
+in clusterbomb mode to 100,000 variants. Those limits do not cap '--repeat' or
+the complete expanded request set. Check both the request count and the work
+those requests perform.
+
+## Read request identities
+
+Every concrete request receives a unique printable label from which text
+references are derived. A text report uses complete labels where they fit. If
+any is too long for a table, it uses ID-prefixed, middle-elided references and
+prints the complete mapping once. Structured request records carry the complete
+labels; other structured evidence joins to them by numeric request ID.
+
+'--name' supplies the label base for ordinary requests and prefixes varied
+labels. Unnamed ordinary requests receive labels such as A and B. A varied
+request uses its token names and source values. Repeats, multiple URLs sharing
+one name, and duplicate variants receive ~N suffixes:
+
+  DELAY=100us~1  DELAY=100us~2  DELAY=5000us~1  DELAY=5000us~2
+
+A '--vary' encoder changes the value used to build the request, not the source
+value in its label. In tturl measure and tturl detect, '--pin' accepts a
+complete label, a block name, or a fan token.
+
+The Requests section summarises common fields and the differences between
+requests. With '-v', the section instead shows resolved HTTP/2 pseudo-headers,
+request fields, and complete non-empty bodies. Verbose output may expose
+credentials or include large binary values.
+
+## Choose destinations
+
+For the arrival-order commands, each batch uses one connection, so all
+request URLs in a run must
+share one host and port. Paths, methods, headers, cookies and bodies may differ.
+
+The arrival-order commands open TLS connections and require the peer to
+negotiate HTTP/2.
+Schemeless URLs use https://. With an explicit http:// URL, tturl still sends
+the request over that TLS connection; only its HTTP/2 :scheme value changes.
+'--insecure' (or '-k') skips certificate verification; TLS remains enabled.
+
+tturl time supports distinct destinations and selected HTTP/1.1 or HTTP/2
+pools. Its verbose preview uses the selected protocol. Read tturl help time.
+
+Concurrent HTTP/2 streams do not prove that application work is concurrent.
+Requests may share a session, account, resource, cache entry, lock, or
+rate-limit bucket. Read tturl help design before deciding whether such shared
+state is deliberate or a confound.
+
+## Count the work
+
+tturl race, tturl measure, and tturl analyse send the complete expanded trial
+batch on every measured trial. tturl detect instead treats the expanded set as
+candidates; each comparison selects at most '--width' requests.
+
+For arrival-order commands, '--warmup' adds priming trials to every connection,
+including replacements. tturl race, tturl measure and tturl analyse can select
+a distinct request set with '--warmup-only'; otherwise the measured batch is
+reused. tturl detect requires a distinct '--warmup-only' set and never primes
+with candidates. See tturl help delivery. tturl time warms complete workers;
+see tturl help time.
+
+## Next steps
+
+  tturl help blocks    Preamble, blocks, inheritance, and option placement
+  tturl help headers   Headers, authentication, cookies, and methods
+  tturl help bodies    Data, multipart form, JSON, and file-backed content
+  tturl help vary      Sources, combination modes, encoders, and substitution

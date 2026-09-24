@@ -1,0 +1,97 @@
+tturl race, tturl measure, tturl analyse, and tturl detect use the same request
+grammar. Request arguments begin with a preamble and may continue in explicit
+'--block' sections. The preamble also holds every command-wide option.
+
+## Preamble and blocks
+
+Arguments before the first '--block' form the preamble. Request options there
+establish the baseline inherited by every block. Without '--block', the
+preamble itself becomes one implicit block:
+
+  tturl race -k --trials 1 \
+    'https://127.0.0.1:8443/sleep?duration=100us'
+
+Bare URLs and '--url' values may be mixed. Within one scope, bare URLs come
+first in their authored order, followed by '--url' values in their authored
+order, regardless of how the forms are interleaved.
+
+Once '--block' appears, only explicit blocks contribute requests. A block with
+its own URLs uses them instead of the preamble URLs. A block without a URL
+inherits the preamble URLs:
+
+  tturl race -k --trials 1 \
+    --url 'https://127.0.0.1:8443/sleep?duration=100us' \
+    --block --name fast1 \
+    --block --name fast2 \
+    --block 'https://127.0.0.1:8443/sleep?duration=5000us' --name slow
+
+This command sends three requests: fast1 and fast2 use the preamble URL, while
+slow uses the URL in its block.
+
+tturl adds https:// to a URL without a scheme.
+
+A block may contain several URLs, each of which becomes a request group with
+the same resolved options. '--repeat' N makes N identical copies of every
+request in the block.
+
+A block that uses '--vary' must resolve to exactly one URL. Its variation
+tokens may occur in any supported part of the request, including headers and
+body content. Each variation produces one request group from that URL.
+
+## Inheritance
+
+Each explicit block resolves against the preamble in these ways:
+
+- Header-family inputs, cookie values, and inputs of the same body kind are
+  evaluated in preamble-then-block order. Their family-specific override,
+  deletion, and accumulation rules still apply.
+- A block's URL list replaces the preamble URL list. Its method, repeat count,
+  name, and variation mode replace the corresponding preamble setting when set.
+- '--vary' bindings accumulate by token. A later binding for the same token
+  replaces the inherited binding.
+- '--delete-header' NAME removes values accumulated under that name so far. A
+  later header or authentication option can add the name again.
+- '--reset-body' discards the complete inherited body before the block adds its
+  own body content.
+- '--form-escape' is inherited unless the block sets its own Boolean value;
+  '--form-escape=false' disables an inherited setting.
+
+An inherited body and a block body must use the same body kind unless the block
+uses '--reset-body'.
+
+For the detailed rules applied while resolving a block, see:
+
+  tturl help headers   Combine headers, credentials, and cookies
+  tturl help bodies    Combine or replace inherited request bodies
+  tturl help vary      Inherit bindings and expand request variants
+
+## Option placement
+
+The command flag reference groups options by where they are valid:
+
+- Command, execution, and output options must precede the first '--block'.
+  Common options must also precede it, except '-h' and '--help'.
+- Request options may appear in the preamble or a block.
+- Block options are valid only after '--block'.
+
+A request option after '--block' affects only that block. Open another block to
+start another override of the same preamble baseline.
+
+## Give commands distinct warmups
+
+Normally, fixed-work commands use their measured request batch for priming.
+'--warmup-only' marks a block for a separate priming batch: its requests never
+enter a measured trial, and unmarked blocks remain the measured batch.
+
+'--warmup-only' requires '--warmup' N with N greater than zero and at least
+one unmarked request. Arrival-order commands use the distinct batch for every
+priming trial on each initial or replacement connection. tturl time uses whole
+worker trials; see tturl help time. For arrival-order warmup, read
+tturl help delivery.
+
+## Next steps
+
+  tturl help requests   Inspect the expanded requests and connection policy
+  tturl help headers    Configure inherited headers, credentials, and cookies
+  tturl help bodies     Combine or replace inherited request bodies
+  tturl help vary       Expand one block into several concrete requests

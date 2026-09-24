@@ -1,0 +1,229 @@
+tturl demo-server is a local HTTP/2 target for learning tturl and running
+controlled experiments. It offers known timing differences, body processing,
+diagnostic timestamps, and a deliberately racy one-use quota.
+
+tturl demo-server is unsupported on Windows because Go's clock does not provide
+the resolution required for its timing routes and diagnostic timestamps. The
+arrival-order commands support Windows.
+
+Its timing routes deliberately consume CPU. Keep the default loopback binding
+and do not expose it beyond the local machine. A local browser may still send
+cross-site requests that consume substantial CPU.
+
+## Start safely
+
+  tturl demo-server
+
+The server listens at https://127.0.0.1:8443 by default. Its ephemeral,
+self-signed certificate exists only in memory. We will use '-k' to disable
+certificate verification in tturl and curl.
+
+'--port' (or '-p') selects another port. Use 0 to ask the operating system for a
+free port and print the chosen address. '--bind-host' (or '-b') selects the
+listening host. An empty host listens on all available interfaces.
+
+## Try the timing signal
+
+Inspect a single two-request trial:
+
+  tturl race -k \
+    --block 'https://127.0.0.1:8443/sleep?duration=100us' --name fast \
+    --block 'https://127.0.0.1:8443/sleep?duration=5000us' --name slow
+
+Describe repeated trials of the same batch with tturl measure:
+
+  tturl measure -k --cycles 10 \
+    --block 'https://127.0.0.1:8443/sleep?duration=100us' --name fast \
+    --block 'https://127.0.0.1:8443/sleep?duration=5000us' --name slow
+
+The fast request should usually arrive first. Replace 5000us with 150us to see
+how CPU contention and experimental conditions affect a smaller signal.
+
+## Try a state-change race
+
+The quota exercise creates one permitted use, then shows how overlapping
+request handling can overrun it.
+
+Create a quota and extract its token:
+
+  token=$(curl -sk -X POST https://127.0.0.1:8443/quotas \
+    | jq -r '.result.token')
+
+Redeem the token twice with curl. The first request will succeed. The second
+will fail with 'quota_exhausted'.
+
+  curl -sk -X POST "https://127.0.0.1:8443/quotas/$token/use" | jq
+  curl -sk -X POST "https://127.0.0.1:8443/quotas/$token/use" | jq
+
+Create a fresh quota, then release eight uses as one batch:
+
+  token=$(curl -sk -X POST https://127.0.0.1:8443/quotas \
+    | jq -r '.result.token')
+
+  tturl race -k --repeat 8 -X POST \
+    "https://127.0.0.1:8443/quotas/$token/use"
+
+Several requests should usually return 200. Inspect the retained state:
+
+  curl -sk "https://127.0.0.1:8443/quotas/$token" | jq
+
+The status endpoint reports:
+
+  limit     number of uses the quota permits
+  accepted  number of uses the server accepted
+  overrun   number of accepted uses beyond the limit
+
+If accepted is greater than limit, the state-change race allowed more uses than
+the quota permits. The overrun value says how many extra uses were accepted.
+
+The limit overrun occurs because the server synchronises the availability check
+and accepted-use update separately rather than as one operation. A short,
+calibrated burst of work lies between them. Concurrently handled requests can
+therefore pass the check before any request records its use. Each then
+proceeds to the update, allowing the quota to be exceeded.
+
+## Route reference
+
+GET /
+  Return 200 OK and list all routes as plain text.
+
+GET /sleep?duration=D
+  Spin for the non-negative Go duration D, then return 204 No Content. Useful
+  units include ns, us, ms, and s. Spell microseconds as us.
+
+POST /sleep
+  Read duration=D from a URL-encoded form, then spin and return 204 No Content.
+
+GET /work?iterations=N
+  Perform N fixed arithmetic iterations, then return 204. Iterations have no
+  time unit. Elapsed cost depends on hardware, frequency, load, and contention.
+
+POST /work
+  Read iterations=N from a URL-encoded form and perform that many arithmetic
+  iterations, then return 204 No Content.
+
+POST /sha256
+  Return 200 OK and the lowercase SHA-256 digest of the complete request body
+  as plain text. If the body cannot be read completely, return 400 Bad Request
+  as plain text.
+
+GET /now
+  Return 200 OK and Unix wall-clock time in plain text, as decimal nanoseconds.
+
+POST /quotas
+  Create a quota permitting one accepted use. Return 201 Created with token and
+  limit in JSON. If token generation fails, return 500 Internal Server Error
+  with code quota_creation_failed in JSON.
+
+GET /quotas/TOKEN
+  Return 200 OK with limit, accepted-use count, and overrun in JSON.
+
+POST /quotas/TOKEN/use
+  Attempt one use. Return 200 OK with a distinct receipt when accepted, or 409
+  Conflict when the quota is exhausted. Both responses are JSON.
+
+Quota JSON always contains result and error, exactly one of which is non-null.
+Errors have a stable code and human-readable message. An unknown token returns
+404 Not Found with code quota_not_found.
+
+Invalid timing input returns 400 Bad Request as plain text. When timing-work
+routes are disabled, GET and POST /sleep and /work instead return 403 Forbidden
+with a plain-text explanation. This check precedes input validation. An
+unsupported method returns 405 Method Not Allowed.
+
+## How timing work is produced
+
+/sleep spin-waits instead of asking the operating system to sleep. It consumes
+CPU while repeatedly reading the monotonic clock, avoiding scheduler wake
+latency at fine durations. /work consumes CPU for a fixed number of arithmetic
+iterations instead of targeting elapsed time.
+
+GET parameters are decoded before the timed operation. When comparing
+durations, use the same unit, as in 100us and 5000us. POST forms are also read
+and decoded before the timed operation. Keep compared request bodies similar
+in shape.
+
+When tuning positional padding, differences in request shape are deliberate.
+With tturl race, '--arrange' none keeps request identities at fixed outbound
+positions. Use '--padding' to set the positional pattern and '--padding-at' to
+override particular positions.
+
+Successful /sleep, /work, and /sha256 responses include server-side diagnostic
+timestamps in their response headers. Values are Unix nanoseconds:
+
+  X-Server-Time-Handler-Start
+  X-Server-Time-Sleep-Start   X-Server-Time-Sleep-End
+  X-Server-Time-Work-Start    X-Server-Time-Work-End
+  X-Server-Time-Hash-Start    X-Server-Time-Hash-End
+
+These headers and the /now response are server diagnostics, not tturl timing
+evidence. The timing commands in tturl use response arrival order instead.
+
+## Add propagation delay
+
+'--rtt' D sets a round-trip-time floor below TLS. The listener delays raw TCP
+traffic in each direction by half of D, so connection setup and HTTP/2 traffic
+experience the delay. For example:
+
+  tturl demo-server --rtt 200ms --jitter 20ms
+
+'--jitter' J adds independently sampled directional delays, producing up to J
+of total RTT variation. Delayed chunks retain TCP byte order. Timers perform
+these waits, so the relay does not occupy CPU as /sleep and /work do.
+
+This is a focused local propagation model, not a WAN emulator. Read boundaries
+stand in for packets, and the model has no bandwidth, queue, loss, duplication,
+or reordering controls.
+
+## Resource limits
+
+The defaults governing CPU exposure and HTTP/2 concurrency are:
+
+  --timing-work-max 1s
+  --quota-work 25us
+  --max-concurrent-streams 2048
+
+At startup, the server benchmarks its fixed arithmetic once. It uses that
+measurement to derive the /work iteration maximum and the quota-use work count.
+The calibrated counts adapt to the current machine.
+
+'--timing-work-max' D directly limits each /sleep request to a positive duration
+D and sets the duration target used to derive the /work iteration maximum.
+
+Set '--timing-work-max' to unlimited to remove both limits, or to 0 to disable
+GET and POST /sleep and /work. Quota routes and '--quota-work' are unaffected.
+
+The /work maximum is an iteration count, not an elapsed-time deadline. Changes
+in load or CPU frequency after startup can alter how long it takes. Limits are
+checked once before work begins. Raise the limit or select unlimited only when
+the added CPU exposure serves the experiment.
+
+'--quota-work' D sets the target for fixed work between the quota availability
+check and accepted-use update. The default target is 25us. A larger value
+widens the approximate race window and increases CPU work for every accepted
+quota-use request. Set it to 0 to disable the inserted work. Quota work is
+limited to 16,777,216 calibrated iterations; a target requiring more fails
+startup.
+
+Startup output reports the effective timing-route state or limits and quota-use
+work. Calibrated iteration counts describe that server run, not stable
+conversions from duration to iterations.
+
+'--max-concurrent-streams' accepts 1 through 4294967295. It limits concurrent
+HTTP/2 streams on each connection, not total connections or HTTP/1.1 requests,
+and does not impose a server-wide handler limit.
+
+The server has a ten-second header-read timeout, but no write timeout or
+request-wide deadline.
+
+URL-encoded forms have the standard 10 MiB form limit. The /sha256 route has no
+application-level body limit.
+
+The server retains the 4,096 most recently accessed quotas and evicts the least
+recently used.
+
+## Next steps
+
+  tturl help getting-started   Run your first complete local experiment
+  tturl help race              Inspect route responses and trial-level outcomes
+  tturl help delivery          Use RTT and jitter to explore connection fitting

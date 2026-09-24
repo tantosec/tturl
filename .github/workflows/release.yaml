@@ -1,0 +1,692 @@
+# Cross-compiled release: publishes tturl archives and checksums to a GitHub
+# Release and a two-platform image to GHCR. Both channels are gated on the CI
+# workflow (reused via workflow_call) passing for the tagged commit.
+#
+# Prepare the version change on a clean branch and merge it through a pull
+# request. Then tag the resulting main commit and push that tag.
+#   make release-prepare VERSION=0.1.0
+#   git add release/version.txt CITATION.cff && git commit
+#   # push the branch, review and merge the pull request, then update main
+#   git tag v0.1.0
+#   git push origin v0.1.0
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+env:
+  # Keep release builders on the published consumer floor from go.mod.
+  GO_MINIMUM_VERSION: '1.26.6'
+  # Publish candidates and stable releases into the final package namespace.
+  TTURL_IMAGE: ghcr.io/tantosec/tturl
+  TTURL_SOURCE: https://github.com/tantosec/tturl
+
+jobs:
+  metadata:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    name: Release metadata
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_MINIMUM_VERSION }}
+          check-latest: true
+          cache: false
+
+      - name: Match tag to committed version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          case "$RELEASE_TAG" in
+            v*) make release-check VERSION="${RELEASE_TAG#v}" ;;
+            *) echo "release tag must start with v: $RELEASE_TAG" >&2; exit 1 ;;
+          esac
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "release tag must point to a commit contained in main" >&2
+            exit 1
+          fi
+
+  # Run the full Go, race, vulnerability, and Nix gates against the tagged
+  # commit. The unprivileged builders overlap this gate, while each privileged
+  # publisher waits for both CI and its own verified builder output.
+  ci:
+    needs: metadata
+    uses: ./.github/workflows/ci.yaml
+    with:
+      ranking_evidence_retention_days: 90
+
+  artifacts:
+    needs: metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    name: Release artifacts
+    permissions:
+      contents: read
+      pull-requests: read
+    env:
+      GORELEASER_BIN: goreleaser
+    outputs:
+      artifact-digest: ${{ steps.upload.outputs.artifact-digest }}
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_MINIMUM_VERSION }}
+          check-latest: true
+          cache-dependency-path: |
+            go.mod
+            go.sum
+            Makefile
+            .goreleaser.yaml
+            scripts/goreleaser.sh
+
+      # This unprivileged builder installs the exact release engine but cannot
+      # publish. The checkout-free publisher below receives only its verified
+      # Actions artifact.
+      - name: Install GoReleaser
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: v2.17.0
+          install-only: true
+
+      - name: Build and verify release artifacts
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: make release-verify VERSION="${RELEASE_TAG#v}" REVISION="$GITHUB_SHA"
+
+      - name: Generate linked pull-request notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          notes_dir="$RUNNER_TEMP/tturl-release-notes"
+          mkdir -p "$notes_dir"
+          # Roll unpublished and draft release changes into the next release.
+          gh api --paginate \
+            "/repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq '.[] | select(.draft == false) | .tag_name' |
+            go run ./tools/releasemaint notes-base "$RELEASE_TAG" \
+              >"$notes_dir/base.txt"
+          base="$(tr -d '\n' <"$notes_dir/base.txt")"
+          range="$GITHUB_SHA"
+          if [ -n "$base" ]; then
+            range="$base..$GITHUB_SHA"
+          fi
+          git rev-list --first-parent --reverse "$range" \
+            >"$notes_dir/commits.txt"
+          : >"$notes_dir/pulls.json"
+          while read -r commit; do
+            if [[ ! "$commit" =~ ^[0-9a-f]{40,64}$ ]]; then
+              echo "invalid release-note commit: $commit" >&2
+              exit 1
+            fi
+            gh api \
+              --header 'X-GitHub-Api-Version: 2022-11-28' \
+              "/repos/$GITHUB_REPOSITORY/commits/$commit/pulls?per_page=100" \
+              >>"$notes_dir/pulls.json"
+            printf '\n' >>"$notes_dir/pulls.json"
+          done <"$notes_dir/commits.txt"
+          go run ./tools/releasemaint render-notes "$GITHUB_REPOSITORY" \
+            <"$notes_dir/pulls.json" >dist/release-notes.md
+
+      - name: Preserve verified release artifacts
+        id: upload
+        uses: actions/upload-artifact@v7
+        with:
+          name: tturl-release-${{ github.run_attempt }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/checksums.txt
+            dist/release-notes.md
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+  container-build:
+    needs: metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    name: Build container
+    outputs:
+      archive-sha256: ${{ steps.archive.outputs.sha256 }}
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+    permissions:
+      contents: read
+    env:
+      DOCKER_BUILD_RECORD_UPLOAD: false
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Set reproducible image timestamp
+        run: |
+          timestamp="$(git show --no-patch --format=%ct "$GITHUB_SHA")"
+          case "$timestamp" in
+            ''|*[!0-9]*)
+              echo "invalid commit timestamp: $timestamp" >&2
+              exit 1
+              ;;
+          esac
+          echo "SOURCE_DATE_EPOCH=$timestamp" >>"$GITHUB_ENV"
+
+      - name: Build OCI archive
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: cmd/tturl/docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          pull: true
+          push: false
+          provenance: false
+          sbom: false
+          tags: ${{ env.TTURL_IMAGE }}:${{ github.ref_name }}
+          outputs: >-
+            type=oci,dest=${{ runner.temp }}/tturl-image.tar,rewrite-timestamp=true
+          build-args: |
+            SOURCE=${{ env.TTURL_SOURCE }}
+            VERSION=${{ github.ref_name }}
+            REVISION=${{ github.sha }}
+            TREE=clean
+          annotations: |
+            index:org.opencontainers.image.source=${{ env.TTURL_SOURCE }}
+            index:org.opencontainers.image.revision=${{ github.sha }}
+            index:org.opencontainers.image.version=${{ github.ref_name }}
+            index:org.opencontainers.image.title=tturl
+            index:org.opencontainers.image.description=HTTP/2 CLI for timeless timing attacks and request races
+            index:org.opencontainers.image.licenses=MIT
+
+      - name: Record OCI archive
+        id: archive
+        run: |
+          archive="$RUNNER_TEMP/tturl-image.tar"
+          echo "sha256=$(sha256sum "$archive" | cut -d' ' -f1)" >>"$GITHUB_OUTPUT"
+
+      - name: Preserve OCI archive
+        id: upload
+        uses: actions/upload-artifact@v7
+        with:
+          name: tturl-container-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/tturl-image.tar
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+  container-publish:
+    needs: [ci, container-build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    name: Publish container
+    concurrency:
+      group: release-container-${{ github.repository }}-${{ github.ref_name }}
+      cancel-in-progress: false
+    permissions:
+      actions: read
+      packages: write
+    steps:
+      # This is the only container step with packages:write. It checks out no
+      # repository content and executes no third-party action or repository
+      # program. The archive crosses the boundary as an immutable Actions
+      # artifact with its expected SHA-256; this job validates it before use.
+      - name: Publish verified image and aliases
+        env:
+          ARCHIVE_SHA256: ${{ needs.container-build.outputs.archive-sha256 }}
+          ARTIFACT_ID: ${{ needs.container-build.outputs.artifact-id }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          REVISION: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          publish_dir="$RUNNER_TEMP/tturl-publish"
+          archive="$publish_dir/tturl-image.tar"
+          auth_file="$publish_dir/auth.json"
+          local_index="$publish_dir/local-index.json"
+          remote_index="$publish_dir/remote-index.json"
+          inspect_error="$publish_dir/inspect-error.txt"
+          mkdir -p "$publish_dir"
+
+          # Admit only the exact archive produced by the unprivileged builder.
+          gh api "/repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" \
+            >"$publish_dir/artifact.zip"
+          if [ "$(unzip -Z1 "$publish_dir/artifact.zip")" != \
+            'tturl-image.tar' ]; then
+            echo 'container artifact has unexpected contents' >&2
+            exit 1
+          fi
+          unzip -q "$publish_dir/artifact.zip" -d "$publish_dir"
+          echo "$ARCHIVE_SHA256  $archive" | sha256sum --check --strict
+
+          # Validate the image structure and identity before using credentials.
+          skopeo inspect --raw "oci-archive:$archive" >"$local_index"
+          verify_image_index() {
+            jq --exit-status \
+              --arg source "$TTURL_SOURCE" \
+              --arg revision "$REVISION" \
+              --arg version "$RELEASE_TAG" '
+              .schemaVersion == 2 and
+              (.mediaType == "application/vnd.oci.image.index.v1+json") and
+              (.annotations["org.opencontainers.image.source"] == $source) and
+              (.annotations["org.opencontainers.image.revision"] == $revision) and
+              (.annotations["org.opencontainers.image.version"] == $version) and
+              (.annotations["org.opencontainers.image.title"] == "tturl") and
+              (.annotations["org.opencontainers.image.description"] ==
+                "HTTP/2 CLI for timeless timing attacks and request races") and
+              (.annotations["org.opencontainers.image.licenses"] == "MIT") and
+              ([.manifests[] |
+                .platform.os + "/" + .platform.architecture] | sort ==
+                ["linux/amd64", "linux/arm64"]) and
+              all(.manifests[]; .digest |
+                test("^sha256:[0-9a-f]{64}$"))
+            ' "$1"
+          }
+          verify_image_index "$local_index"
+          local_digest="$(skopeo manifest-digest "$local_index")"
+          if [[ ! "$local_digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "invalid local image digest: $local_digest" >&2
+            exit 1
+          fi
+
+          # Limit registry authentication to this phase and remove its state on
+          # every exit path.
+          trap 'skopeo logout --authfile "$auth_file" ghcr.io >/dev/null 2>&1 || true; rm -f "$auth_file"' EXIT HUP INT TERM
+          printf '%s' "$GH_TOKEN" | skopeo login \
+            --username "$GITHUB_ACTOR" \
+            --password-stdin \
+            --authfile "$auth_file" \
+            ghcr.io
+
+          # Publish the immutable version tag, or safely resume its publication.
+          reference="$TTURL_IMAGE:$RELEASE_TAG"
+          tag_exists=false
+          if skopeo inspect --authfile "$auth_file" --raw \
+            "docker://$reference" >"$remote_index" 2>"$inspect_error"; then
+            verify_image_index "$remote_index"
+            tag_exists=true
+          elif grep -Eiq 'manifest unknown|name unknown|not found' "$inspect_error"; then
+            skopeo copy --all --preserve-digests \
+              --dest-authfile "$auth_file" \
+              "oci-archive:$archive" "docker://$reference"
+            skopeo inspect --authfile "$auth_file" --raw \
+              "docker://$reference" >"$remote_index"
+            verify_image_index "$remote_index"
+          else
+            cat "$inspect_error" >&2
+            exit 1
+          fi
+          remote_digest="$(skopeo manifest-digest "$remote_index")"
+          if [[ ! "$remote_digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "invalid remote image digest: $remote_digest" >&2
+            exit 1
+          fi
+          if [ "$tag_exists" = false ] && \
+            [ "$remote_digest" != "$local_digest" ]; then
+            echo "exact tag resolves to $remote_digest; want $local_digest" >&2
+            exit 1
+          fi
+
+          # Only stable releases advance the moving minor, major, and latest
+          # aliases. Verify each alias after copying it.
+          if [[ "$RELEASE_TAG" != *-* ]]; then
+            minor="${RELEASE_TAG%.*}"
+            major="${RELEASE_TAG%%.*}"
+            for alias in "$minor" "$major" latest; do
+              skopeo copy --all --preserve-digests \
+                --src-authfile "$auth_file" \
+                --dest-authfile "$auth_file" \
+                "docker://$TTURL_IMAGE@$remote_digest" \
+                "docker://$TTURL_IMAGE:$alias"
+              skopeo inspect --authfile "$auth_file" --raw \
+                "docker://$TTURL_IMAGE:$alias" >"$remote_index"
+              alias_digest="$(skopeo manifest-digest "$remote_index")"
+              if [ "$alias_digest" != "$remote_digest" ]; then
+                echo "$alias resolves to $alias_digest; want $remote_digest" >&2
+                exit 1
+              fi
+            done
+          fi
+
+  release:
+    needs: [ci, artifacts]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    name: Publish GitHub Release
+    concurrency:
+      group: release-github-${{ github.repository }}-${{ github.ref_name }}
+      cancel-in-progress: false
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      # This is the only GitHub Release step with contents:write. It checks out
+      # no repository content and executes no third-party action or repository
+      # program. It accepts only the verified artifact produced above.
+      - name: Publish verified release artifacts
+        env:
+          ARTIFACT_DIGEST: ${{ needs.artifacts.outputs.artifact-digest }}
+          ARTIFACT_ID: ${{ needs.artifacts.outputs.artifact-id }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          publish_dir="$RUNNER_TEMP/tturl-release"
+          payload_dir="$publish_dir/payload"
+          artifact_zip="$publish_dir/artifact.zip"
+          release_json="$publish_dir/release.json"
+          release_error="$publish_dir/release-error.txt"
+          mkdir -p "$payload_dir"
+
+          # Authenticate the builder payload by immutable artifact identity and
+          # digest before inspecting any of its contents.
+          if [[ ! "$ARTIFACT_ID" =~ ^[0-9]+$ ]]; then
+            echo "invalid Actions artifact ID: $ARTIFACT_ID" >&2
+            exit 1
+          fi
+          expected_artifact_digest="${ARTIFACT_DIGEST#sha256:}"
+          if [[ ! "$expected_artifact_digest" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "invalid Actions artifact digest: $ARTIFACT_DIGEST" >&2
+            exit 1
+          fi
+          gh api "/repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" \
+            >"$artifact_zip"
+          echo "$expected_artifact_digest  $artifact_zip" | \
+            sha256sum --check --strict
+
+          # Reconstruct the complete payload contract independently of the
+          # builder, then reject missing, duplicate, or additional files.
+          if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.[1-9][0-9]*)?$ ]]; then
+            echo "invalid release tag: $RELEASE_TAG" >&2
+            exit 1
+          fi
+          version="${RELEASE_TAG#v}"
+          expected_names="$publish_dir/expected-names.txt"
+          {
+            echo checksums.txt
+            for os in darwin linux; do
+              for arch in amd64 arm64; do
+                echo "tturl_${version}_${os}_${arch}.tar.gz"
+              done
+            done
+            for arch in amd64 arm64; do
+              echo "tturl_${version}_windows_${arch}.zip"
+            done
+          } | sort >"$expected_names"
+          expected_payload_names="$publish_dir/expected-payload-names.txt"
+          {
+            cat "$expected_names"
+            echo release-notes.md
+          } | sort >"$expected_payload_names"
+          unzip -Z1 "$artifact_zip" | sort >"$publish_dir/actual-names.txt"
+          if ! cmp -s \
+            "$expected_payload_names" "$publish_dir/actual-names.txt"; then
+            echo 'release artifact has unexpected contents:' >&2
+            diff -u \
+              "$expected_payload_names" \
+              "$publish_dir/actual-names.txt" >&2 || true
+            exit 1
+          fi
+          unzip -q "$artifact_zip" -d "$payload_dir"
+          (cd "$payload_dir" && sha256sum --check --strict checksums.txt)
+
+          # Release notes become API input, so constrain their shape and size.
+          notes_file="$payload_dir/release-notes.md"
+          notes_size="$(stat --format=%s "$notes_file")"
+          if [ "$notes_size" -lt 13 ] || [ "$notes_size" -gt 65536 ] || \
+            ! jq --exit-status --raw-input --slurp '
+              startswith("## Changes\n\n") and
+              endswith("\n") and
+              (contains("\u0000") | not)
+            ' "$notes_file" >/dev/null; then
+            echo 'release notes have invalid contents' >&2
+            exit 1
+          fi
+
+          # Build the expected server-side digest map from the verified payload.
+          declare -A expected_digests
+          while read -r digest name; do
+            expected_digests["$name"]="$digest"
+          done <"$payload_dir/checksums.txt"
+          expected_digests[checksums.txt]="$(
+            sha256sum "$payload_dir/checksums.txt" | cut -d' ' -f1
+          )"
+
+          # Bind publication to the workflow commit for both lightweight and
+          # annotated tags.
+          prerelease=false
+          if [[ "$RELEASE_TAG" == *-* ]]; then
+            prerelease=true
+          fi
+          gh api "/repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" \
+            >"$publish_dir/tag.json"
+          tag_type="$(jq --raw-output '.object.type' "$publish_dir/tag.json")"
+          tag_revision="$(jq --raw-output '.object.sha' "$publish_dir/tag.json")"
+          if [ "$tag_type" = tag ]; then
+            gh api \
+              "/repos/$GITHUB_REPOSITORY/git/tags/$tag_revision" \
+              >"$publish_dir/tag-object.json"
+            tag_type="$(jq --raw-output '.object.type' \
+              "$publish_dir/tag-object.json")"
+            tag_revision="$(jq --raw-output '.object.sha' \
+              "$publish_dir/tag-object.json")"
+          fi
+          if [ "$tag_type" != commit ] || [ "$tag_revision" != "$GITHUB_SHA" ]; then
+            echo 'release tag does not name the workflow commit' >&2
+            exit 1
+          fi
+
+          # Resume the exact release when it exists. Otherwise create a draft
+          # that remains unpublished until every asset is present and verified.
+          release_path="/repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG"
+          created_release=false
+          if ! gh api "$release_path" >"$release_json" 2>"$release_error"; then
+            if ! grep -Eiq 'HTTP 404|Not Found' "$release_error"; then
+              cat "$release_error" >&2
+              exit 1
+            fi
+            created_release=true
+            jq --null-input --rawfile body "$notes_file" \
+              --arg tag "$RELEASE_TAG" \
+              --arg revision "$GITHUB_SHA" \
+              --argjson prerelease "$prerelease" \
+              '{tag_name: $tag, target_commitish: $revision, name: $tag,
+                body: $body, draft: true, prerelease: $prerelease}' \
+              >"$publish_dir/create.json"
+            if ! gh api --method POST \
+              "/repos/$GITHUB_REPOSITORY/releases" \
+              --input "$publish_dir/create.json" >"$release_json" \
+              2>"$release_error"; then
+              # A failed response can be ambiguous after GitHub accepts the
+              # creation. Recover only if the exact tag becomes observable.
+              release_found=false
+              for _ in {1..15}; do
+                if gh api "$release_path" >"$release_json" 2>/dev/null; then
+                  release_found=true
+                  break
+                fi
+                sleep 2
+              done
+              if [ "$release_found" != true ]; then
+                cat "$release_error" >&2
+                exit 1
+              fi
+            fi
+          fi
+
+          # Refuse to resume a release whose identity or metadata belongs to a
+          # different publication attempt.
+          if ! jq --exit-status \
+            --arg tag "$RELEASE_TAG" \
+            --arg revision "$GITHUB_SHA" \
+            --argjson prerelease "$prerelease" '
+              .tag_name == $tag and
+              .target_commitish == $revision and
+              .name == $tag and
+              (.body | type == "string" and
+                length >= 13 and length <= 65536 and
+                startswith("## Changes\n\n") and endswith("\n") and
+                (contains("\u0000") | not)) and
+              .prerelease == $prerelease
+            ' "$release_json" >/dev/null; then
+            echo 'existing GitHub Release metadata does not match' >&2
+            exit 1
+          fi
+          observed_notes="$publish_dir/observed-release-notes.md"
+          jq --join-output '.body // ""' "$release_json" >"$observed_notes"
+          if [ "$created_release" = true ] && \
+            ! cmp -s "$notes_file" "$observed_notes"; then
+            echo 'created GitHub Release body does not match generated notes' >&2
+            exit 1
+          fi
+
+          release_id="$(jq --raw-output '.id' "$release_json")"
+          if [[ ! "$release_id" =~ ^[0-9]+$ ]]; then
+            echo "invalid GitHub Release ID: $release_id" >&2
+            exit 1
+          fi
+          assets_path="/repos/$GITHUB_REPOSITORY/releases/$release_id/assets"
+          assets_json="$publish_dir/assets.json"
+
+          # Asset uploads are eventually consistent. These helpers require one
+          # server-side object with the expected digest for every asset name.
+          load_release_assets() {
+            gh api "$assets_path?per_page=100" >"$assets_json"
+          }
+
+          wait_for_verified_asset() {
+            local name="$1"
+            local expected_digest="sha256:${expected_digests[$name]}"
+            local count digest state
+            for _ in {1..15}; do
+              load_release_assets
+              count="$(jq --arg name "$name" \
+                '[.[] | select(.name == $name)] | length' "$assets_json")"
+              if [ "$count" -gt 1 ]; then
+                echo "duplicate GitHub Release asset: $name" >&2
+                return 1
+              fi
+              if [ "$count" -eq 1 ]; then
+                digest="$(jq --raw-output --arg name "$name" \
+                  '.[] | select(.name == $name) | .digest // ""' \
+                  "$assets_json")"
+                state="$(jq --raw-output --arg name "$name" \
+                  '.[] | select(.name == $name) | .state' "$assets_json")"
+                if [ "$state" = uploaded ] && \
+                  [ "$digest" = "$expected_digest" ]; then
+                  return 0
+                fi
+                if [ -n "$digest" ] && \
+                  [ "$digest" != "$expected_digest" ]; then
+                  echo "GitHub Release asset digest does not match: $name" >&2
+                  return 1
+                fi
+                if [ "$state" != new ] && [ "$state" != uploaded ]; then
+                  echo "GitHub Release asset is in state $state: $name" >&2
+                  return 1
+                fi
+              fi
+              sleep 2
+            done
+            echo "GitHub Release asset did not become verifiable: $name" >&2
+            return 1
+          }
+
+          verify_release_asset_set() {
+            local actual_name actual_names_file expected_name
+            load_release_assets
+            while read -r actual_name; do
+              if [[ -z "${expected_digests[$actual_name]+present}" ]]; then
+                echo "unexpected GitHub Release asset: $actual_name" >&2
+                return 1
+              fi
+            done < <(jq --raw-output '.[].name' "$assets_json")
+            while read -r expected_name; do
+              wait_for_verified_asset "$expected_name"
+            done <"$expected_names"
+            load_release_assets
+            actual_names_file="$publish_dir/actual-release-names.txt"
+            jq --raw-output '.[].name' "$assets_json" | \
+              sort >"$actual_names_file"
+            if ! cmp -s "$expected_names" "$actual_names_file"; then
+              echo 'GitHub Release asset set does not match:' >&2
+              diff -u "$expected_names" "$actual_names_file" >&2 || true
+              return 1
+            fi
+          }
+
+          # A previous attempt may have uploaded assets already. Reject foreign
+          # names before deciding whether this run can safely resume.
+          load_release_assets
+          while read -r name; do
+            if [[ -z "${expected_digests[$name]+present}" ]]; then
+              echo "unexpected GitHub Release asset: $name" >&2
+              exit 1
+            fi
+          done < <(jq --raw-output '.[].name' "$assets_json")
+
+          # A completed release is idempotent only when its exact asset set is
+          # still present and valid.
+          if jq --exit-status '.draft == false' "$release_json" >/dev/null; then
+            verify_release_asset_set
+            exit 0
+          fi
+
+          # Fill only missing expected assets. Ambiguous upload failures are
+          # accepted solely when the server exposes the expected digest.
+          while read -r name; do
+            load_release_assets
+            if jq --exit-status --arg name "$name" \
+              'any(.[]; .name == $name)' "$assets_json" >/dev/null; then
+              wait_for_verified_asset "$name"
+              continue
+            fi
+            case "$name" in
+              *[!A-Za-z0-9._-]*)
+                echo "unsafe GitHub Release asset name: $name" >&2
+                exit 1
+                ;;
+            esac
+            upload_response="$publish_dir/upload-$name.json"
+            upload_error="$publish_dir/upload-$name.txt"
+            if ! curl --fail-with-body --silent --show-error \
+              --request POST \
+              --header "Authorization: Bearer $GH_TOKEN" \
+              --header 'Accept: application/vnd.github+json' \
+              --header 'X-GitHub-Api-Version: 2022-11-28' \
+              --header 'Content-Type: application/octet-stream' \
+              --data-binary "@$payload_dir/$name" \
+              "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$release_id/assets?name=$name" \
+              >"$upload_response" 2>"$upload_error"; then
+              # The server can accept the asset while the client observes an
+              # error. The release-ID listing and digest decide whether that
+              # ambiguous result is a safe partial success.
+              if ! wait_for_verified_asset "$name"; then
+                cat "$upload_error" >&2
+                cat "$upload_response" >&2
+                exit 1
+              fi
+            else
+              wait_for_verified_asset "$name"
+            fi
+          done <"$expected_names"
+
+          # Publish only after a final exact-set and digest verification.
+          verify_release_asset_set
+          gh api --method PATCH \
+            "/repos/$GITHUB_REPOSITORY/releases/$release_id" \
+            --field draft=false >"$release_json"
+          jq --exit-status '.draft == false' "$release_json" >/dev/null

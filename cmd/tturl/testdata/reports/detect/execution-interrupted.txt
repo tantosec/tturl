@@ -1,0 +1,15 @@
+
+---------------------------------- Execution -----------------------------------
+
+Comparisons: 128 attempted; 0 rank-complete; 128 incomplete; unlimited maximum.
+Measured request operations: 256 attempted; 0 rank-complete; 0 retained.
+Connections: 128 planned; 128 observed; 0 replacements.
+Priming batches: 128 attempted; 0 rank-complete; 128 incomplete.
+Priming request operations: 128 attempted; 0 rank-complete; excluded from
+                            inference.
+Priming cancellations: 128 incomplete batches across 128 connections.
+Comparison cancellations: 128 incomplete comparisons across 128 connections; 256
+                          attempted request participations.
+Caution: incomplete priming may leave cold-state effects in adaptive
+         comparisons.
+Completion: stopped.

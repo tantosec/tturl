@@ -1,0 +1,113 @@
+## The idea
+
+A timing side channel exists when differences in server work reveal information.
+A conventional timing attack estimates those differences from elapsed response
+times, where network jitter can easily bury a small effect.
+
+A timeless timing attack instead relies on requests arriving simultaneously
+and being handled concurrently, then observes only the order in which their
+final response headers arrive. tturl releases a request batch through a shared
+client-side gate to encourage near-simultaneous arrival and may enable
+concurrent handling, but it cannot guarantee either outcome. A consistent
+order across controlled trials may reflect a difference in server work without
+measuring its size. The order alone does not locate its cause.
+
+Batch release has a second, distinct use: exercising a state-change race
+condition. In that case, the interesting evidence may be response content,
+status, or a durable side effect rather than arrival order.
+
+## How tturl releases a batch
+
+HTTP/2 carries concurrent request and response streams over one ordered
+connection. Frames can interleave, but response headers cannot overtake one
+another in transit, so tturl can rank their arrival across streams.
+
+For an all-bodyless batch, tturl packs every request's complete header block
+into one TLS application-data record and ends each stream there. A batch with
+non-empty bodies sends all complete header blocks in one record, advances body
+prefixes, then completes those bodies with positive DATA and END_STREAM frames
+in one shared final record. With '--body-bytes-withheld' N above zero, each
+final DATA frame carries up to N withheld bytes. Zero sets no fixed tail or
+delay and uses the first feasible shared final record. Bodyless and explicitly
+empty streams end in the shared header record. See:
+
+  tturl help bodies
+  tturl help delivery
+
+A server that authenticates TLS records before using their contents must receive
+and authenticate a complete record before releasing its plaintext to HTTP/2.
+TCP may split or retransmit those bytes, but each shared record still creates
+one TLS-to-HTTP/2 delivery gate on such a server.
+
+A mixed batch does not make every stream complete at the same gate. HTTP/2 then
+parses and dispatches the frames sequentially; a peer may act on headers or body
+prefixes before the body-bearing streams complete.
+
+The shared gate reduces client-controlled release skew. It does not guarantee
+near-simultaneous arrival, concurrent request handling, or concurrent
+application task execution. An intermediary may forward requests separately,
+and the peer, runtime, or application may process them sequentially.
+
+## Batch, trial, position, and rank
+
+A batch is the set of requests sent as one operation on one HTTP/2 connection.
+One race of that complete batch is a trial.
+
+Position is a request's zero-based place in the outbound batch. Position 0 is
+written first.
+
+Rank is a response's zero-based place in the order that tturl reads final
+response headers. An informational 1xx response can precede the final response
+but does not take a rank. Body completion does not determine rank. Rank 0
+arrived first.
+
+For one three-request trial:
+
+  request  position  rank
+  A               0     2
+  B               1     0
+  C               2     1
+
+The responses arrived in the order B, C, A. Their ranks do not say how much
+time passed between those arrivals.
+
+## Why arrangement matters
+
+A server may favour the first stream it receives. If a request always occupies
+the same outbound position, a position effect can look like a request effect.
+An arrangement policy controls how requests move between positions over time.
+
+  none     preserve authored order for each trial
+  rotate   shuffle once per cycle, then cyclically shift that order each trial
+  random   shuffle positions independently for each trial
+
+Rotation is exactly balanced when complete cycles are retained. Random
+arrangement balances only in expectation. A fixed arrangement preserves authored
+order. It can reveal a position-linked pattern, but cannot tell whether request
+identity or position caused it.
+
+## What arrival order can tell you
+
+Arrival order is ordinal evidence. It can show that A usually arrived before B
+under the tested conditions. It cannot establish any request's elapsed time,
+the time gap between arrivals, or the mechanism that caused the order.
+
+## References
+
+Kettle, James. 2023. "Smashing the State Machine: The True Potential of Web
+  Race Conditions." PortSwigger Research.
+  https://portswigger.net/research/smashing-the-state-machine
+
+Kettle, James. 2024. "Listen to the Whispers: Web Timing Attacks That Actually
+  Work." PortSwigger Research.
+  https://portswigger.net/research/listen-to-the-whispers-web-timing-attacks-that-actually-work
+
+Van Goethem, Tom, Christina Pöpper, Wouter Joosen, and Mathy Vanhoef. 2020.
+  "Timeless Timing Attacks: Exploiting Concurrency to Leak Secrets over Remote
+  Connections." 29th USENIX Security Symposium, 1985-2002.
+  https://www.usenix.org/conference/usenixsecurity20/presentation/van-goethem
+
+## Next steps
+
+  tturl help commands   Choose the kind of evidence your question needs
+  tturl help design     Apply position balance and control likely confounds

@@ -1,0 +1,50 @@
+================================================================================
+                                 tturl measure
+================================================================================
+
+----------------------------------- Requests -----------------------------------
+
+Target: https://example.test
+
+  control    GET  /request/0
+  candidate  GET  /request/1
+
+Total: 2 requests.
+
+---------------------------------- Experiment ----------------------------------
+
+Design: 1 balanced rotation cycle (2 trials, 4 measured request operations).
+Arrangement: rotate; each request occupies every position once per cycle.
+Priming: none; early trials may include cold-state effects.
+Pacing: 2 requests/batch; batch-rate ceiling unlimited; request-rate ceiling
+        unlimited; minimum batch-start interval unconstrained.
+Connections: up to 1 active (default).
+Streams: honour the peer's advertised concurrent-stream limit.
+Response limits: 8MiB accepted body per stream; 30s transport time per batch.
+Run timeout: unlimited for live request execution.
+Caution: only 1 complete rotation cycle is planned. Position assignment will be
+         balanced, but the plan has no replication across rotation blocks.
+
+--------------------------------- Measurement ----------------------------------
+
+Measurement unavailable: no rank-complete trials were retained.
+
+----------------------------- HTTP status outcomes -----------------------------
+
+No ranked responses; no trial produced a complete set of ranks.
+
+-------------------------------- Position check --------------------------------
+
+No position estimate is available because no ranks were retained.
+
+---------------------------------- Execution -----------------------------------
+
+Trials: 0 attempted; 0 rank-complete; 0 incomplete; 0 retained.
+        2 unattempted.
+Cycles: 0/1 retained; 1 unattempted.
+Connections: 0 observed vs 1 planned; no replacements.
+Measured request operations: 0 attempted; 0 rank-complete; 0 retained.
+Caution: no complete rotation cycle was retained; no position-balanced
+         measurement is available.
+Completion: failed.
+Error: connection closed before a complete trial

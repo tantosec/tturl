@@ -1,0 +1,3 @@
+Hide
+Ctrl+D
+Wait

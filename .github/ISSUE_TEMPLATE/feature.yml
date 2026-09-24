@@ -1,0 +1,41 @@
+name: Feature or improvement
+description: Propose a new capability or an improvement to existing behaviour.
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What would this enable or improve?
+      description: Describe the problem or capability rather than only a solution.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Affected surface
+      options:
+        - tturl
+        - tth2
+        - ranking
+        - stats
+        - Documentation
+        - Other or multiple surfaces
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+      description: If you have a specific design in mind, describe it here.
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+    validations:
+      required: false

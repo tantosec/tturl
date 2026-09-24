@@ -1,0 +1,198 @@
+Use '--report' json for versioned JSON Lines evidence. Read the first run's
+schema before interpreting later records, and require a terminal result before
+treating a stored artefact as complete.
+
+## Select the current contract
+
+  command  schema             record order
+  race     tturl.race/v1     run, requests, warmups/trials, result
+  measure  tturl.measure/v1  run, requests, result
+  analyse  tturl.analyse/v1  run, requests, trials, result
+  detect   tturl.detect/v1   run, requests, result
+  time     tturl.time/v1     run, requests, phases/warmups/trials, result
+
+tturl time embeds connection lifecycle histories in phase, warmup, trial and
+result records. Join these entries by connection_id.
+
+All five use the common v1 definitions resource. Only run carries schema and
+command. Schema identifiers are logical contracts, not URLs; match them exactly.
+Unknown versions require an explicit consumer update. Schema versions are
+independent of binary versions.
+
+Retrieve this binary's command and common documents offline with tturl schema.
+Read tturl help schema to configure a resolver under the original document IDs.
+
+Run records preserve original subcommand-first argv beside authoritative
+resolved plan, acquisition and command-specific method. Finite applicable limits
+are positive; null means unlimited. Zero body capture means disabled. Unknown
+observations are null; omission means the concept does not apply. Tool revision
+and modified are null when build provenance is unknown.
+
+The schema index and normative whole-stream contract are published at:
+
+  https://github.com/tantosec/tturl/tree/main/cmd/tturl/doc/schemas
+  https://github.com/tantosec/tturl/blob/main/cmd/tturl/doc/structured-output-contract.md
+
+## Keep stdout machine-readable
+
+Reports use stdout or '--output' FILE. Previews, notices and progress use
+stderr. Preserve stderr separately from the JSONL pipeline.
+
+A non-'-' output path is created or truncated when the command opens its report
+destination. tturl race, tturl measure and tturl analyse open it after delivery
+resolution, including automatic connection fitting. tturl detect opens it before
+automatic fitting, so a fitting failure can already have truncated the file.
+Fitting may open TLS connections and send HTTP/2 PINGs before measured
+collection. tturl time opens its output after request materialisation and static
+allocation, before live acquisition. Writes are not atomic: later failures can
+leave an empty or partial artefact, and earlier file contents are not restored.
+Use a fresh output path when existing evidence must be preserved. Validate the
+artefact before use.
+
+## Select and join evidence
+
+Every request has a dense zero-based request_id, unique label and concrete
+request. tturl time identifies its purpose with request_set; the arrival-order
+commands use role. The complete catalogue precedes evidence. All public request
+IDs share this namespace, including distinct warmups and expanded baselines.
+Concurrent trial lines may arrive out of index order; use explicit coordinates.
+Priming evidence does not contribute to measured aggregates.
+
+Select race or analyse trials incrementally:
+
+  jq -c 'select(.kind == "trial")' < race-complete.jsonl
+
+For a bounded stored stream, join observations to request labels:
+
+  jq -s '
+    (map(select(.kind == "request")) | INDEX(.request_id)) as $requests
+    | .[] | select(.kind == "trial") | .outcomes[]
+    | {request_id, label: $requests[.request_id | tostring].label,
+       position, rank, response}
+  ' race-complete.jsonl
+
+Read descriptive measure histograms, or inspect detect
+physical and inferential evidence:
+
+  jq -s 'last.measurement.requests' measure-available.jsonl
+  jq -s 'last.detection.requests' detect-found.jsonl
+
+Measure matrices have explicit request/position axes. Sparse rank and status
+counts omit zeros and increase by key. Raw mean rank is zero-based; normalised
+mean rank divides by effective width minus one, or is zero for width one. Detect
+physical participation includes filler reuse; inference samples count
+participation while a candidate remains in contention. These populations can
+differ. Read method-specific interpretation in tturl help analyse and detect.
+
+The checked example files are in the schema index's examples directory. 'jq -s'
+loads the whole stream; use it only on bounded stored artefacts. '--rank-rows',
+'--pin' and '--verbose' affect text presentation only.
+
+## Require closure and inspect failures
+
+Require a final result and inspect acquisition completion:
+
+  jq -se 'last | select(.kind == "result") | .completion' \
+    race-interrupted.jsonl
+
+Completion is complete with null failure, stopped with an interrupted failure,
+or failed with a diagnostic failure. Common failures carry stable code and
+non-empty message. Individual failed attempts can coexist with complete race
+acquisition. Execution distinguishes planned, attempted, rank-complete,
+incomplete, retained and excluded work.
+
+Read availability and scientific findings separately:
+
+  jq -s 'last | {completion, measurement}' measure-unavailable.jsonl
+  jq -s 'last | {completion, analysis}' analyse-difference.jsonl
+  jq -s 'last | {completion, detection}' detect-negative.jsonl
+
+A complete acquisition does not establish a statistical difference. Partial runs
+can retain descriptive evidence. Native analyse replay requires a result and
+validates the recorded method against raw trials.
+
+Interruption normally writes a result when the destination remains writable. An
+output failure may leave complete newline-terminated records followed by a
+truncated fragment. Discard that fragment; a prefix still lacks closure. A
+consumer-closed stdout pipe may omit result. The arrival-order commands exit
+zero on this stop. tturl time exits zero only for an unlimited run without an
+independent fatal failure; a bounded duration run exits nonzero. Exit status
+alone never certifies a complete report.
+
+## Understand bytes and timestamps
+
+Request bodies use an encoding of utf-8 or base64. Captured response-body data
+is base64. Extracted values use utf-8 or base64. Decode each data member by its
+adjacent encoding. Body SHA-256 digests use standard base64
+rather than hexadecimal representation.
+
+Other byte-bearing strings use a $B64[...] scalar when the original bytes are
+not valid UTF-8. A literal string that would collide with that reserved marker
+is encoded the same way, so consumers can decode without ambiguity. JSON text
+escapes non-ASCII characters and remains ASCII on the wire.
+
+headers_sent_at is sampled immediately before dispatch of the TLS application
+record containing every request's HEADERS frame and any CONTINUATION frames. It
+is null if that dispatch did not complete. body_finalised_at is sampled before
+dispatch of the TLS application record containing final DATA plus END_STREAM for
+every body-carrying request. It is null for a bodyless batch or if that dispatch
+did not complete. These are outbound wall-clock diagnostics, not response
+timings. Arrival rank remains the timing evidence.
+
+## Duration evidence
+
+tturl time records warmups, trial outcomes and inline connection lifecycle
+histories, including recovery evidence. Its milestones and gates are signed
+integer nanosecond offsets from a shared trial-local monotonic baseline; each
+trial has a UTC provenance anchor. Missing observations are null with reasons.
+Only defined duration fields are durations. Its text summary aggregates duration
+populations and extraction counts; JSON preserves individual trials and selected
+captures. response.complete describes validated response draining, independently
+of request delivery failures and capture completeness. Read tturl help time.
+
+## Capture deliberately
+
+By default, structured reports from tturl race and tturl analyse retain status,
+declared length, accepted-body byte count, body digest and stream outcomes.
+
+'--capture-headers' adds response headers and trailers. '--capture-body' SIZE
+retains at most that many bytes from each response. The unlimited setting
+retains every body byte accepted before completion or reset. Zero or omitted
+body capture disables prefix retention. Header capture requires '--report' json.
+Body capture requires it for tturl analyse; tturl race and tturl time also
+permit a text report with '--extract-regex'. Extraction requires nonzero capture
+and searches only the retained prefix. For tturl race, tturl analyse and tturl
+time, body_captured_complete means the captured bytes equal the accepted bytes,
+not that the HTTP response completed cleanly or matched Content-Length. Inspect
+the stream outcome too. The run records capture settings, including its decoded
+header limit when header capture is enabled. The shared parser limit applies in
+both modes. tturl time uses null for headers, trailers and body when
+they are not captured.
+
+A finite capture limit bounds only the retained prefix of each response. The
+four arrival-order commands record response_limits in acquisition with
+body_bytes bounding accepted DATA per stream. batch_timeout_ns bounds transport
+time per batch. A null value means unlimited. Local limit failures carry no
+response facts from that batch and use the code response_body_limit or
+batch_timeout. Trial records from tturl race and tturl analyse carry the code in
+their failure object; tturl analyse then makes terminal inference unavailable.
+tturl measure lists the attempts in the result's acquisition_failures array. For
+the operational contract, see:
+
+  tturl help delivery
+
+The tturl race and analyse commands write each trial record as it completes.
+Both reports grow with completed trials. Capture and extraction operate on
+HTTP/2 response bytes without decompressing content encodings.
+
+Arguments, request records, errors, extracts, and captured responses may expose
+credentials, tokens, or other sensitive data. Store and share structured reports
+as sensitive engagement data.
+
+## Next steps
+
+  tturl help output     Route reports and interpret shared text evidence
+  tturl help race       Capture or extract trial-level response evidence
+  tturl help analyse    Replay the fixed statistical analysis
+  tturl help detect     Interpret adaptive physical and inferential evidence
+  tturl help time       Interpret duration populations and release milestones

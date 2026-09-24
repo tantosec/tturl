@@ -1,0 +1,1152 @@
+{
+  "title": "tturl common v1 definitions",
+  "$defs": {
+    "non_negative_integer": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "nullable_non_negative_integer": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "nullable_number": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "dispatch_times": {
+      "description": "Diagnostic outbound wall-clock observations only. Infer timing differences from response arrival order, not from these timestamps or elapsed wall-clock durations.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "headers_sent_at",
+        "body_finalised_at"
+      ],
+      "properties": {
+        "headers_sent_at": {
+          "description": "Time immediately before dispatch of the TLS application record containing every request's HEADERS; null if that record was not successfully flushed.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "body_finalised_at": {
+          "description": "Time immediately before dispatch of the TLS application record containing final DATA and END_STREAM for every body-carrying request; null for a batch without body bytes or if that record was not successfully flushed.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      }
+    },
+    "request_body": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bytes",
+        "sha256",
+        "encoding",
+        "data"
+      ],
+      "properties": {
+        "bytes": {
+          "$ref": "#/$defs/non_negative_integer"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/]{43}=$",
+          "description": "Standard base64 encoding of the SHA-256 digest of the observed body bytes."
+        },
+        "encoding": {
+          "enum": [
+            "utf-8",
+            "base64"
+          ]
+        },
+        "data": {
+          "type": "string"
+        }
+      },
+      "description": "Original request body bytes and standard-base64 SHA-256 digest; data uses the stated encoding."
+    },
+    "encoded_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "encoding",
+        "data"
+      ],
+      "properties": {
+        "encoding": {
+          "enum": [
+            "utf-8",
+            "base64"
+          ]
+        },
+        "data": {
+          "type": "string"
+        }
+      },
+      "description": "Decode data by its explicit encoding; base64 is canonical standard base64."
+    },
+    "offset": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/non_negative_integer"
+        },
+        {
+          "$ref": "#/$defs/non_negative_integer"
+        }
+      ],
+      "minItems": 2,
+      "maxItems": 2,
+      "description": "Half-open byte offsets into the retained body prefix."
+    },
+    "reset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "code_number"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "code_number": {
+          "$ref": "#/$defs/non_negative_integer"
+        }
+      },
+      "description": "Observed HTTP/2 reset name and numeric protocol code."
+    },
+    "execution_connections": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "planned",
+        "observed",
+        "replacements"
+      ],
+      "properties": {
+        "planned": {
+          "$ref": "#/$defs/non_negative_integer"
+        },
+        "observed": {
+          "$ref": "#/$defs/non_negative_integer"
+        },
+        "replacements": {
+          "$ref": "#/$defs/non_negative_integer"
+        }
+      },
+      "description": "Planned concurrent capacity, distinct observed connections and observed replacement connections; observed may exceed planned."
+    },
+    "execution_batches": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempted",
+        "rank_complete",
+        "incomplete"
+      ],
+      "properties": {
+        "attempted": {
+          "$ref": "#/$defs/non_negative_integer"
+        },
+        "rank_complete": {
+          "$ref": "#/$defs/non_negative_integer"
+        },
+        "incomplete": {
+          "$ref": "#/$defs/non_negative_integer"
+        }
+      },
+      "description": "Physical batch attempts: attempted equals rank_complete plus incomplete."
+    },
+    "execution_priming": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "batches",
+        "request_operations"
+      ],
+      "properties": {
+        "batches": {
+          "$ref": "#/$defs/execution_batches"
+        },
+        "request_operations": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "attempted",
+            "rank_complete"
+          ],
+          "properties": {
+            "attempted": {
+              "$ref": "#/$defs/non_negative_integer"
+            },
+            "rank_complete": {
+              "$ref": "#/$defs/non_negative_integer"
+            }
+          }
+        }
+      },
+      "description": "Connection preparation only; excluded from measured ranks and inference."
+    },
+    "execution_request_operations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempted",
+        "rank_complete",
+        "retained"
+      ],
+      "properties": {
+        "attempted": {
+          "$ref": "#/$defs/non_negative_integer"
+        },
+        "rank_complete": {
+          "$ref": "#/$defs/non_negative_integer"
+        },
+        "retained": {
+          "$ref": "#/$defs/non_negative_integer"
+        }
+      },
+      "description": "Physical request inclusions in measured batch attempts, rank-complete batches and retained evidence. Counts do not prove bytes reached the peer."
+    },
+    "positive_integer": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "nullable_positive_integer": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    },
+    "failure": {
+      "type": "object",
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "enum": [
+            "response_body_limit",
+            "batch_timeout",
+            "transport_error",
+            "connection_error",
+            "run_timeout",
+            "deadline_exceeded",
+            "interrupted",
+            "internal_error",
+            "acquisition_failed",
+            "comparison_failed"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "description": "Stable condition code and byte-preserving diagnostic message. The containing state specifies whether failure can be null."
+    },
+    "completion": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "state",
+            "failure"
+          ],
+          "properties": {
+            "state": {
+              "const": "complete"
+            },
+            "failure": {
+              "const": null
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "state",
+            "failure"
+          ],
+          "properties": {
+            "state": {
+              "const": "stopped"
+            },
+            "failure": {
+              "type": "object",
+              "required": [
+                "code",
+                "message"
+              ],
+              "properties": {
+                "code": {
+                  "const": "interrupted"
+                },
+                "message": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "state",
+            "failure"
+          ],
+          "properties": {
+            "state": {
+              "const": "failed"
+            },
+            "failure": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/failure"
+                },
+                {
+                  "properties": {
+                    "code": {
+                      "not": {
+                        "const": "interrupted"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "description": "Acquisition disposition, independent of scientific availability and individual attempt failures."
+    },
+    "tool": {
+      "type": "object",
+      "required": [
+        "version",
+        "revision",
+        "modified"
+      ],
+      "properties": {
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "modified": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "target": {
+      "type": "object",
+      "required": [
+        "dial_address",
+        "origin"
+      ],
+      "properties": {
+        "dial_address": {
+          "type": "string",
+          "minLength": 1
+        },
+        "origin": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "run_envelope": {
+      "type": "object",
+      "required": [
+        "kind",
+        "schema",
+        "command",
+        "tool",
+        "argv",
+        "started_at",
+        "target",
+        "request_count"
+      ],
+      "properties": {
+        "kind": {
+          "const": "run"
+        },
+        "schema": {
+          "type": "string"
+        },
+        "command": {
+          "enum": [
+            "race",
+            "measure",
+            "analyse",
+            "detect"
+          ]
+        },
+        "tool": {
+          "$ref": "#/$defs/tool"
+        },
+        "argv": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "target": {
+          "$ref": "#/$defs/target"
+        },
+        "request_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "description": "A stream begins here. argv preserves original arguments, beginning with the subcommand; plan, acquisition and method describe authoritative resolved facts."
+    },
+    "maximum": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "mode"
+          ],
+          "properties": {
+            "mode": {
+              "const": "automatic_review"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "mode"
+          ],
+          "properties": {
+            "mode": {
+              "const": "unlimited"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "mode",
+            "connections"
+          ],
+          "properties": {
+            "mode": {
+              "const": "bounded"
+            },
+            "connections": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "description": "Requested path-fitting maximum policy, independent of finite-work narrowing."
+    },
+    "selection": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "mode"
+          ],
+          "properties": {
+            "mode": {
+              "const": "default"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "mode",
+            "requested_connections"
+          ],
+          "properties": {
+            "mode": {
+              "const": "fixed"
+            },
+            "requested_connections": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "state",
+            "maximum"
+          ],
+          "properties": {
+            "mode": {
+              "const": "path_fit"
+            },
+            "state": {
+              "const": "fitted"
+            },
+            "maximum": {
+              "$ref": "#/$defs/maximum"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "state",
+            "maximum"
+          ],
+          "properties": {
+            "mode": {
+              "const": "path_fit"
+            },
+            "state": {
+              "const": "skipped_single_trial"
+            },
+            "maximum": {
+              "$ref": "#/$defs/maximum"
+            }
+          }
+        }
+      ],
+      "description": "Requested connection policy and resolved fitting disposition."
+    },
+    "rate_limits": {
+      "type": "object",
+      "required": [
+        "batch_max_per_second",
+        "request_max_per_second",
+        "effective_batch_interval_ns"
+      ],
+      "properties": {
+        "batch_max_per_second": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "request_max_per_second": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "effective_batch_interval_ns": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false,
+      "not": {
+        "properties": {
+          "batch_max_per_second": {
+            "const": null
+          },
+          "request_max_per_second": {
+            "const": null
+          }
+        }
+      },
+      "description": "Finite requested rates compose into the maximum of their measured-batch intervals; priming does not change measured width."
+    },
+    "path_fit": {
+      "type": "object",
+      "required": [
+        "rtt_samples_ns",
+        "rtt_basis_ns",
+        "fitted_connections",
+        "capped"
+      ],
+      "properties": {
+        "rtt_samples_ns": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "rtt_basis_ns": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "fitted_connections": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "capped": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Exactly three observed network RTT samples; basis is their maximum. Fitted count precedes any numerical cap or finite-work narrowing."
+    },
+    "delivery": {
+      "type": "object",
+      "required": [
+        "selection",
+        "connection_ceiling",
+        "connection_limit",
+        "peer_stream_limit_ignored"
+      ],
+      "properties": {
+        "selection": {
+          "$ref": "#/$defs/selection"
+        },
+        "connection_ceiling": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "connection_limit": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "peer_stream_limit_ignored": {
+          "type": "boolean"
+        },
+        "rate_limits": {
+          "$ref": "#/$defs/rate_limits"
+        },
+        "path_fit": {
+          "$ref": "#/$defs/path_fit"
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "selection": {
+                "properties": {
+                  "mode": {
+                    "const": "path_fit"
+                  },
+                  "state": {
+                    "const": "fitted"
+                  }
+                },
+                "required": [
+                  "state"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "rate_limits",
+              "path_fit"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "path_fit"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "selection": {
+                "properties": {
+                  "mode": {
+                    "const": "path_fit"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "rate_limits"
+            ]
+          }
+        }
+      ],
+      "description": "Requested selection, post-cap connection ceiling and effective capacity after finite-work narrowing. Opened connections are execution observations."
+    },
+    "response_limits": {
+      "type": "object",
+      "required": [
+        "body_bytes",
+        "batch_timeout_ns"
+      ],
+      "properties": {
+        "body_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "batch_timeout_ns": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false,
+      "description": "Positive finite accepted-DATA and batch-transport bounds; null means unlimited."
+    },
+    "acquisition": {
+      "type": "object",
+      "required": [
+        "delivery",
+        "run_timeout_ns",
+        "release_delay_ns",
+        "body_bytes_withheld",
+        "tls_verification",
+        "response_limits"
+      ],
+      "properties": {
+        "delivery": {
+          "$ref": "#/$defs/delivery"
+        },
+        "run_timeout_ns": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "release_delay_ns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "body_bytes_withheld": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tls_verification": {
+          "enum": [
+            "enabled",
+            "disabled"
+          ]
+        },
+        "response_limits": {
+          "$ref": "#/$defs/response_limits"
+        }
+      },
+      "description": "Resolved live transport, execution and receive controls, independent of assignment and inference."
+    },
+    "capture": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "headers",
+            "body_bytes"
+          ],
+          "properties": {
+            "headers": {
+              "const": false
+            },
+            "body_bytes": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "headers",
+            "body_bytes",
+            "decoded_header_limit_bytes"
+          ],
+          "properties": {
+            "headers": {
+              "const": true
+            },
+            "body_bytes": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "decoded_header_limit_bytes": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "description": "Disabled body capture is zero; unlimited capture is null. A decoded header limit applies exactly when headers are captured."
+    },
+    "request": {
+      "type": "object",
+      "required": [
+        "kind",
+        "request_id",
+        "label",
+        "url",
+        "pseudo_headers",
+        "headers",
+        "body"
+      ],
+      "properties": {
+        "kind": {
+          "const": "request"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[ -~]+$"
+        },
+        "url": {
+          "type": "string"
+        },
+        "pseudo_headers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "body": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/request_body"
+            }
+          ]
+        },
+        "request_id": {
+          "$ref": "#/$defs/non_negative_integer"
+        }
+      },
+      "description": "Concrete request identity and capture; command schemas supply its experimental role. IDs are dense and ordered in the stream catalogue."
+    },
+    "response": {
+      "type": "object",
+      "required": [
+        "status",
+        "content_length",
+        "body_bytes",
+        "body_captured_bytes",
+        "body_captured_complete",
+        "sha256",
+        "headers",
+        "trailers",
+        "body"
+      ],
+      "properties": {
+        "status": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 999
+        },
+        "content_length": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "body_bytes": {
+          "$ref": "#/$defs/non_negative_integer"
+        },
+        "body_captured_bytes": {
+          "$ref": "#/$defs/non_negative_integer"
+        },
+        "body_captured_complete": {
+          "type": "boolean",
+          "description": "True exactly when retained prefix bytes cover accepted body bytes; does not imply clean HTTP/2 completion."
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/]{43}=$",
+          "description": "Standard base64 encoding of the SHA-256 digest of the observed body bytes."
+        },
+        "headers": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "trailers": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "body": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/encoded_data"
+                },
+                {
+                  "properties": {
+                    "encoding": {
+                      "const": "base64"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "description": "Observed response facts and captured data. Unknown declared content length is null. Capture completeness describes the retained prefix; body_bytes counts observed bytes."
+    },
+    "outcome": {
+      "type": "object",
+      "required": [
+        "request_id",
+        "position",
+        "rank",
+        "stream_id",
+        "response",
+        "reset"
+      ],
+      "properties": {
+        "position": {
+          "$ref": "#/$defs/non_negative_integer"
+        },
+        "rank": {
+          "$ref": "#/$defs/nullable_non_negative_integer"
+        },
+        "stream_id": {
+          "$ref": "#/$defs/nullable_non_negative_integer"
+        },
+        "response": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/response"
+            }
+          ]
+        },
+        "reset": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/reset"
+            }
+          ]
+        },
+        "request_id": {
+          "$ref": "#/$defs/non_negative_integer"
+        }
+      },
+      "description": "One outbound position and global request ID; rank, response and stream facts may be unobserved. Outcomes increase by global request ID."
+    },
+    "reset_count": {
+      "type": "object",
+      "required": [
+        "request_id",
+        "count"
+      ],
+      "properties": {
+        "request_id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false,
+      "description": "Positive observed reset count for a global request ID; sparse records increase by request ID."
+    },
+    "padding": {
+      "type": "object",
+      "required": [
+        "position",
+        "query_fields",
+        "header_fields",
+        "body_fields"
+      ],
+      "properties": {
+        "position": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "query_fields": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "header_fields": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "body_fields": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "description": "Resolved padding applied to an outbound position, independent of request identity."
+    },
+    "warmup": {
+      "type": "object",
+      "required": [
+        "trials_per_connection",
+        "batch_width"
+      ],
+      "properties": {
+        "trials_per_connection": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "batch_width": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "description": "Resolved connection-local priming trial count and active batch width; disabled priming has width zero."
+    },
+    "assignment": {
+      "type": "object",
+      "required": [
+        "request_id",
+        "position"
+      ],
+      "properties": {
+        "request_id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "position": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "description": "Intended global request ID at one outbound position, preserved even when dispatch fails."
+    },
+    "status_count": {
+      "type": "object",
+      "required": [
+        "status",
+        "count"
+      ],
+      "properties": {
+        "status": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 999
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false,
+      "description": "Observed HTTP status count, ordered by increasing status. Zero counts are omitted."
+    },
+    "rank_count": {
+      "type": "object",
+      "required": [
+        "rank",
+        "count"
+      ],
+      "properties": {
+        "rank": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false,
+      "description": "Sparse histogram entry. Zero counts are omitted and records are ordered by increasing rank."
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/tantosec/tturl/main/cmd/tturl/doc/schemas/tturl-common-v1.schema.json"
+}

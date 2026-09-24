@@ -1,0 +1,61 @@
+================================================================================
+                                 tturl measure
+================================================================================
+
+----------------------------------- Requests -----------------------------------
+
+Target: https://example.test
+
+  early   GET  /request/0
+  late    GET  /request/1
+
+Total: 2 requests.
+
+---------------------------------- Experiment ----------------------------------
+
+Design: 2 balanced rotation cycles (4 trials, 8 measured request operations).
+Arrangement: rotate; each request occupies every position once per cycle.
+Priming: none; early trials may include cold-state effects.
+Pacing: 2 requests/batch; batch-rate ceiling unlimited; request-rate ceiling
+        unlimited; minimum batch-start interval unconstrained.
+Connections: up to 1 active (default).
+Streams: honour the peer's advertised concurrent-stream limit.
+Response limits: 8MiB accepted body per stream; 30s transport time per batch.
+Run timeout: unlimited for live request execution.
+
+--------------------------------- Measurement ----------------------------------
+
+Rank profile (first -> last):
+  Intensity (% upper bound): . 0 | : 12.5 | - 25 | = 37.5 | + 50
+                             * 62.5 | # 75 | % 87.5 | @ 100
+  request  profile      mean  normalised
+  early    [@@@@....]   0.00        0.00
+  late     [....@@@@]   1.00        1.00
+
+Rank counts (columns are ranks 0..1; 4 retained trials):
+  early    [ 4  0 ]
+  late     [ 0  4 ]
+
+Pairwise precedence (row-before-column fraction):
+  request  early  late
+  early        -  1.00
+  late      0.00     -
+
+Descriptive result only; no statistical finding is inferred.
+
+----------------------------- HTTP status outcomes -----------------------------
+
+Ranked responses: HTTP 200 in all 4 ranked trials for every request.
+
+-------------------------------- Position check --------------------------------
+
+  position  observations  mean rank  normalised mean rank
+         0             4       0.00                  0.00
+         1             4       1.00                  1.00
+  spread: 1.00
+
+---------------------------------- Execution -----------------------------------
+
+4/4 trials were rank-complete and retained in 2/2 balanced cycles.
+One planned connection was observed; no resets or replacements.
+Measured request operations: 8 attempted; 8 rank-complete; 8 retained.

@@ -1,0 +1,108 @@
+Headers, authentication, cookies, and the method form part of the request
+baseline that blocks inherit from the preamble. tturl resolves that baseline,
+adds its defaults, and presents the constructed requests for review.
+
+## Headers and defaults
+
+'--header' (or '-H') accepts three forms:
+
+  -H 'Name: value'   send a field with value
+  -H 'Name;'         send a field with an empty value
+  -H 'Name:'         suppress a generated field
+
+Repeat '-H' to send several fields, including duplicate names. Field names are
+case-insensitive. An explicit field takes precedence over a convenience option
+or generated field with the same name. The 'Name:' form does not remove an
+explicit field already added. Its generated-field suppression remains in
+effect, although a later explicit '-H' can still send the name.
+
+'--delete-header' NAME removes every value accumulated under that name so far,
+including inherited and generated values. Command-line order matters: a later
+'-H', '-A', or authentication option can add the name again. Use it in a block
+to remove one part of the preamble baseline.
+
+tturl generates these fields unless request options replace or suppress them:
+
+  User-Agent: tturl/<version>
+  Accept: */*
+
+A JSON body changes the generated Accept value to application/json. Data and
+multipart bodies leave it as */*. Body kinds also generate Content-Type. Read
+tturl help bodies for those values.
+
+## Authentication and cookies
+
+'--user-agent' (or '-A') sets User-Agent. An empty '-A' removes the generated
+User-Agent. An explicit '-H' User-Agent field takes precedence.
+
+'--user' (or '-u') USER[:PASSWORD] sends HTTP Basic credentials. Without a
+colon, the password is empty. '--oauth2-bearer' TOKEN creates a Bearer
+Authorization field when TOKEN is non-empty. Within one preamble or block, a
+non-empty bearer token wins over '--user' regardless of option order.
+Any '--user' value or a non-empty block bearer replaces inherited
+authentication; an empty bearer does not. An explicit '-H' Authorization field
+wins over either convenience option.
+
+Credentials in URL userinfo have the lowest precedence. URLs, command lines,
+and text or structured reports may expose credentials. Use '--delete-header'
+Authorization in a block before adding another scheme when the block must not
+inherit preamble authentication.
+
+'--cookie' (or '-b') accepts one name=value pair or several separated by
+semicolons. Repeat it to append more cookies:
+
+  -b 'session=abc; theme=dark' -b 'experiment=A'
+
+The preamble cookies come first, followed by the block cookies. tturl joins the
+resolved pairs into one Cookie field. An explicit '-H' Cookie field replaces
+the generated field. A later '-b' does not restore a suppressed or deleted
+Cookie field; a later explicit '-H' can send one.
+
+## Method
+
+'--request' (or '-X') sends the supplied method verbatim. Without '-X', any
+body declaration selects POST, including one that constructs zero bytes;
+otherwise tturl selects GET. Setting a method does not add or remove a body.
+
+Header names, header values, authentication credentials, cookies, and methods
+may contain '--vary' tokens. Basic credentials are re-encoded after
+substitution. tturl never substitutes into generated values. Read tturl help
+vary for the complete substitution rules.
+
+## HTTP/2 representation
+
+The following representation rules describe the arrival-order commands.
+tturl time validates authored framing before protocol normalisation and retains
+HTTP/1.1 request fields. Read tturl help time for its framing restrictions.
+
+A Host field changes the request's HTTP/2 :authority. The URL still determines
+which host and port tturl dials. Regular field names are lowercased on the wire.
+
+tturl sends at most one Content-Length field. If the first explicit value is
+non-empty, tturl sends it verbatim even when it differs from the body size;
+later duplicate values do not reach the wire. Otherwise tturl sends the actual
+length when the constructed body is non-empty. Bodyless and explicitly empty
+bodies get no generated field.
+
+tturl omits Connection, Keep-Alive, Proxy-Connection, Transfer-Encoding, and
+Upgrade because HTTP/2 forbids them. HTTP/2 permits only TE: trailers. tturl
+sends other TE values unchanged so the peer's handling remains observable.
+
+## Inspect the result
+
+The compact Requests section omits uniform generated headers. When it
+summarises a body, it also omits that request's Content-Type and Content-Length
+fields. Use '-v' to show pseudo-headers, resolved request fields, and complete
+non-empty bodies.
+
+Verbose text does not show a protocol-generated Content-Length. Structured
+request records always include a content-length entry: they record 0 even when
+the wire request has a bodyless or explicitly empty body and sends no such
+field. Verbose and structured output can include large binary content.
+
+## Next steps
+
+  tturl help requests   Inspect the resolved request set and verbose output
+  tturl help blocks     Share fields in the preamble and override them safely
+  tturl help bodies     See which headers each body kind generates
+  tturl help vary       Substitute values into headers, credentials, and cookies

@@ -1,0 +1,250 @@
+# Fixed ranking qualification for pull requests that affect ranking and for
+# every release. The caller owns the trigger and consumes this workflow as one
+# fail-closed CI gate; this workflow owns planning, sharded evidence, and
+# verification.
+name: ranking qualification
+
+on:
+  workflow_call:
+    inputs:
+      go_version:
+        description: Go version used to build qualification evidence
+        required: true
+        type: string
+      evidence_retention_days:
+        description: Retention for qualification evidence
+        required: true
+        type: number
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    name: Ranking qualification plan
+    outputs:
+      shards: ${{ steps.plan.outputs.shards }}
+      artefact-id: ${{ steps.plan.outputs.artefact-id }}
+      required: ${{ steps.impact.outputs.required }}
+      reason: ${{ steps.impact.outputs.reason }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ inputs.go_version }}
+          check-latest: true
+          cache-dependency-path: |
+            go.mod
+            go.sum
+
+      - name: Classify ranking qualification impact
+        id: impact
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = pull_request ]; then
+            if [[ ! "$BASE_SHA" =~ ^[0-9a-f]{40,64}$ ||
+                  ! "$GITHUB_SHA" =~ ^[0-9a-f]{40,64}$ ]]; then
+              echo 'pull-request diff SHAs are unavailable or malformed' >&2
+              exit 1
+            fi
+            # Compare the tested merge result with its current base. Comparing
+            # the base directly with the branch head also includes base-only
+            # changes made after the branch diverged.
+            git diff --name-only --no-renames -z "$BASE_SHA" "$GITHUB_SHA" |
+              go run ./tools/ciimpact ranking-qualification \
+                >"$RUNNER_TEMP/ranking-impact.txt"
+            inspected="base $BASE_SHA, merge $GITHUB_SHA"
+          else
+            {
+              echo 'required=true'
+              echo "reason=non-pull-request event: $EVENT_NAME"
+            } >"$RUNNER_TEMP/ranking-impact.txt"
+            inspected="revision $GITHUB_SHA"
+          fi
+          cat "$RUNNER_TEMP/ranking-impact.txt"
+          required="$(sed -n 's/^required=//p' \
+            "$RUNNER_TEMP/ranking-impact.txt")"
+          reason="$(sed -n 's/^reason=//p' \
+            "$RUNNER_TEMP/ranking-impact.txt")"
+          if [[ ! "$required" =~ ^(true|false)$ || -z "$reason" ]]; then
+            echo 'ranking impact classifier returned malformed output' >&2
+            exit 1
+          fi
+          echo "required=$required" >>"$GITHUB_OUTPUT"
+          echo "reason=$reason" >>"$GITHUB_OUTPUT"
+          {
+            echo '## Ranking qualification impact'
+            echo
+            echo "Required: $required"
+            echo "Reason: $reason"
+            echo "Inspected: $inspected"
+          } >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Read authoritative qualification plan
+        id: plan
+        run: |
+          set -euo pipefail
+          output="$(make --silent ranking-qualification-plan)"
+          printf '%s\n' "$output"
+          shards="$(printf '%s\n' "$output" |
+            sed -n 's/^qualification-shards=//p')"
+          pattern='^\["[a-z0-9-]+"(,"[a-z0-9-]+")*\]$'
+          if [[ ! "$shards" =~ $pattern ]]; then
+            echo "invalid qualification shard list: $shards" >&2
+            exit 1
+          fi
+          echo "shards=$shards" >>"$GITHUB_OUTPUT"
+          artefact_id="$(printf '%s\n' "$output" |
+            sed -n 's/^qualification-artefact-id=//p')"
+          if [[ ! "$artefact_id" =~ ^[a-z0-9-]+$ ]]; then
+            echo "invalid qualification artefact ID: $artefact_id" >&2
+            exit 1
+          fi
+          echo "artefact-id=$artefact_id" >>"$GITHUB_OUTPUT"
+
+  qualify:
+    needs: plan
+    if: needs.plan.outputs.required == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    name: Ranking qualification (${{ matrix.solver }})
+    strategy:
+      fail-fast: false
+      matrix:
+        solver: ${{ fromJSON(needs.plan.outputs.shards) }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v7
+        with:
+          # Qualification is implementation evidence, not a Go compatibility
+          # matrix. Run it once on the consumer-floor toolchain used to build
+          # release artifacts.
+          go-version: ${{ inputs.go_version }}
+          check-latest: true
+          cache-dependency-path: |
+            go.mod
+            go.sum
+
+      - name: Qualify ranking solver
+        env:
+          RANKING_EVIDENCE_DIR: ${{ runner.temp }}/ranking-qualification
+        run: |
+          mkdir -p "$RANKING_EVIDENCE_DIR"
+          make ranking-qualify \
+            RANKING_QUALIFICATION_SHARD=${{ matrix.solver }} \
+            RANKING_OUTPUT="$RANKING_EVIDENCE_DIR/${{ matrix.solver }}.jsonl"
+
+      - name: Preserve ranking qualification evidence
+        id: upload
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: >-
+            ranking-${{ needs.plan.outputs.artefact-id }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.solver }}
+          path: ${{ runner.temp }}/ranking-qualification/${{ matrix.solver }}.jsonl
+          if-no-files-found: error
+          compression-level: 6
+          overwrite: false
+          retention-days: ${{ inputs.evidence_retention_days }}
+
+      - name: Report ranking evidence artifact
+        if: always() && steps.upload.outcome == 'success'
+        run: |
+          echo "Ranking evidence artifact ID: ${{ steps.upload.outputs.artifact-id }}" >>"$GITHUB_STEP_SUMMARY"
+          echo "Ranking evidence artifact digest: ${{ steps.upload.outputs.artifact-digest }}" >>"$GITHUB_STEP_SUMMARY"
+
+  evidence:
+    if: always()
+    needs: [plan, qualify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    name: Ranking qualification evidence
+    steps:
+      - name: Require qualification execution
+        env:
+          PLAN_RESULT: ${{ needs.plan.result }}
+        run: test "$PLAN_RESULT" = success
+
+      - name: Report qualification decision
+        env:
+          QUALIFICATION_REQUIRED: ${{ needs.plan.outputs.required }}
+          QUALIFICATION_REASON: ${{ needs.plan.outputs.reason }}
+        run: |
+          {
+            echo '## Ranking qualification'
+            echo
+            if [ "$QUALIFICATION_REQUIRED" = true ]; then
+              echo "Required: yes ($QUALIFICATION_REASON)"
+            else
+              echo "Safely skipped: $QUALIFICATION_REASON"
+            fi
+          } >>"$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/checkout@v6
+        if: needs.plan.outputs.required == 'true'
+
+      - uses: actions/setup-go@v7
+        if: needs.plan.outputs.required == 'true'
+        with:
+          go-version: ${{ inputs.go_version }}
+          check-latest: true
+          cache-dependency-path: |
+            go.mod
+            go.sum
+
+      - name: Download ranking qualification evidence
+        if: needs.plan.outputs.required == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          pattern: >-
+            ranking-${{ needs.plan.outputs.artefact-id }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}-*
+          path: ${{ runner.temp }}/ranking-qualification
+          merge-multiple: true
+
+      - name: Verify complete ranking qualification evidence
+        if: needs.plan.outputs.required == 'true'
+        env:
+          RANKING_EVIDENCE_DIR: ${{ runner.temp }}/ranking-qualification
+          RANKING_SUMMARY: ${{ runner.temp }}/ranking-qualification-summary.json
+          RANKING_DISPOSITION: ${{ runner.temp }}/ranking-qualification-disposition.md
+        run: |
+          make ranking-qualification-verify \
+            RANKING_EVIDENCE_PATH="$RANKING_EVIDENCE_DIR" \
+            RANKING_SUMMARY_OUTPUT="$RANKING_SUMMARY" \
+            RANKING_DISPOSITION_OUTPUT="$RANKING_DISPOSITION"
+
+      - name: Preserve ranking qualification summary
+        id: upload
+        if: always() && needs.plan.outputs.required == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: >-
+            ranking-${{ needs.plan.outputs.artefact-id }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}-summary
+          path: |
+            ${{ runner.temp }}/ranking-qualification-summary.json
+            ${{ runner.temp }}/ranking-qualification-disposition.md
+          if-no-files-found: error
+          compression-level: 6
+          overwrite: false
+          retention-days: ${{ inputs.evidence_retention_days }}
+
+      - name: Report integrated ranking evidence
+        if: always() && steps.upload.outcome == 'success'
+        run: |
+          echo "Integrated ranking evidence artifact ID: ${{ steps.upload.outputs.artifact-id }}" >>"$GITHUB_STEP_SUMMARY"
+          echo "Integrated ranking evidence digest: ${{ steps.upload.outputs.artifact-digest }}" >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Require successful qualification shards
+        if: always() && needs.plan.outputs.required == 'true'
+        env:
+          QUALIFICATION_RESULT: ${{ needs.qualify.result }}
+        run: test "$QUALIFICATION_RESULT" = success

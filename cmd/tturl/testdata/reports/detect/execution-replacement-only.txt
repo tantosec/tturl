@@ -1,0 +1,8 @@
+
+---------------------------------- Execution -----------------------------------
+
+Comparisons: 0 attempted; 0 rank-complete; 0 incomplete; unlimited maximum.
+Measured request operations: 0 attempted; 0 rank-complete; 0 retained.
+Connections: 1 planned; 2 observed; 1 replacements.
+Caution: 1 connection replacement changed connection state.
+Completion: stopped.

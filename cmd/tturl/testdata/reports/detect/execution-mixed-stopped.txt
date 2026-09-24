@@ -1,0 +1,18 @@
+
+---------------------------------- Execution -----------------------------------
+
+Comparisons: 0 attempted; 0 rank-complete; 0 incomplete; unlimited maximum.
+Measured request operations: 0 attempted; 0 rank-complete; 0 retained.
+Connections: 3 planned; 3 observed; 0 replacements.
+Priming batches: 3 attempted; 0 rank-complete; 3 incomplete.
+Priming request operations: 3 attempted; 0 rank-complete; excluded from
+                            inference.
+Priming failures:
+  acquisition_failed: 1 incomplete batch across 1 connection.
+    Cause: EOF
+  transport_error: 1 incomplete batch across 1 connection.
+    Cause: tth2: stream 5 reset with code INTERNAL_ERROR
+Priming cancellations: 1 incomplete batch across 1 connection.
+Caution: incomplete priming may leave cold-state effects in adaptive
+         comparisons.
+Completion: stopped.

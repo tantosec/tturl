@@ -1,0 +1,435 @@
+tturl detect adaptively searches candidate requests for one early or late
+arrival-order outlier. It compares subsets and stops when it finds an outlier,
+rules out the configured minimum effect, or spends the comparison budget.
+
+Use tturl measure when every request needs the same fixed experiment. Use
+tturl detect to search a larger candidate set for one suspected outlier.
+
+## State the direction
+
+'--direction' late searches for a relatively late request. '--direction' early
+searches for a relatively early one. '--direction' either searches both
+directions against supplied baselines and requires a reserved strategy. The
+accepted aliases fast=early and slow=late describe arrival order, not elapsed
+service time. JSON uses canonical directions; raw argv retains the submitted
+spelling. Choose the scope before collecting data.
+
+## Understand the model
+
+This is a specialised one-result outlier decision, not a general ranking
+method. It returns at most one candidate. Its guarantees concern conditional
+mean rank under adaptive subset selection and random position assignment.
+
+Before running tturl detect:
+
+- Build the candidates from a defensible common reference population.
+- Choose the searched direction before observing the adaptive evidence.
+- Use a different design for systematic peer differences or multiple extremes.
+
+Normalised rank divides rank by width minus one: first is 0 and last is 1. A
+late search uses that value; an early search uses one minus it.
+
+Without baseline controls, evidence is relative to the peers scheduled in each
+comparison. Given the past and the wave's planned peer set, each non-target
+candidate's normalised rank must have conditional mean no greater than 0.5 in
+the searched direction. A qualifying target for a negative decision must
+sustain a searched-direction conditional mean of at least 0.5 plus the
+configured edge in every scheduled peer set.
+
+A block marked '--baseline-only' supplies reusable controls rather than
+candidates. '--baseline-supply' N sets each expanded template's simultaneous
+per-comparison capacity; 'unlimited' permits as many instances as the selected
+width can use. The default is one copy per expanded request per comparison.
+Supply requires '--baseline-only'; unlimited supply permits only one baseline
+block. Baseline blocks exclude '--warmup-only' and reject '--repeat',
+including inherited explicit values, even one.
+
+'--strategy' selects peer-first, rolling-peer-first, baseline-confirmed,
+rolling-baseline-confirmed, baseline-reserved, rolling-baseline-reserved, or
+auto. The default auto strategy resolves as follows:
+
+  direction   baselines  resolved strategy
+  early/late  none       peer-first
+  early/late  supplied   baseline-reserved
+  either      supplied   baseline-reserved
+
+An either-direction search requires at least one baseline. Peer First and
+Baseline Confirmed accept only a known early or late direction.
+
+Peer First spends every broad-field position on candidates. It introduces
+available baselines only after eliminations free positions. This gives broad
+candidate coverage, but its early evidence remains peer-relative. Multiple
+same-direction targets can mask one another, and opposing extremes can make an
+ordinary peer appear extreme. Supplying a baseline does not repair evidence
+already collected against peers.
+
+Baseline Confirmed also discovers broadly against peers, then requires clean
+baseline-relative evidence before a positive commit. It trades extra
+confirmation work for a baseline-relative positive claim. Its nominations and
+negative evidence still include peer-relative comparisons, so several targets
+can still mask a candidate or invalidate a negative premise.
+
+Baseline Reserved includes controls from the first comparison. Its evidence is
+baseline-relative throughout, isolating candidates from multiple target
+extremes at the cost of fewer candidate positions per comparison. It supports
+early, late, and either-direction searches.
+
+Rolling Baseline Reserved uses the same clean-reference allocation but keeps a
+bounded window of comparisons in flight. It buffers physical completions,
+commits the maximal contiguous dispatch prefix, adapts once, and refills the
+window. Selection is explicit; auto selects atomic-wave Baseline Reserved.
+
+The rolling guarantee has a stronger dependence premise. A non-target's
+baseline-relative conditional mean bound must hold given every lower dispatch-
+indexed outcome, including outcomes from physically overlapping comparisons.
+Arbitrary dependence among in-flight comparisons is not allowed. All rolling
+strategies update ordered results sooner under their stronger ordered-prefix
+conditional-mean premise and are never auto-selected. They are not an
+equivalent performance mode. Use tturl measure or tturl analyse to choose
+connections and pacing that retain the timing signal; that experiment does not
+establish this conditional premise.
+
+One representative baseline appearance is sufficient for the statistical
+reference when its conditional-mean premise is defensible. Several appearances
+can give more informative control-relative ranks at wider widths. Baselines
+are not known targets: positive controls and bracketing both arrival extremes
+require different nulls and are outside this feature.
+
+The selected solver cannot verify that a baseline or peer population satisfies
+its premise. A negative result also depends on the configured minimum edge. It
+assumes neither independent comparisons nor a parametric rank distribution.
+Candidates must still be comparable under the stated direction and model.
+
+## Comparisons, width, and allocation
+
+One comparison is one batch send of candidates and any selected baseline
+instances. '--width' N sets the requested comparison width. Without
+baselines it is capped at the candidate count. With baselines it is capped at
+the candidate count plus finite aggregate supply; unlimited supply can fill
+the requested width. The default is 2. With baselines, at least one candidate
+is required; without them, at least two are required. The effective width
+stays fixed after resolution, and eliminated peers can fill comparison
+positions. tturl detect has no trials, cycles, arrangement, capture or
+extraction flags. Wider comparisons cover more candidates or provide finer
+baseline-relative ranks, but change target concurrency and can change the
+observed signal.
+
+For example, this explicit width-eight design compares eight requests at once:
+
+  tturl detect -k --direction late --width 8 --comparisons-max 200 \
+    --repeat 8 'https://127.0.0.1:8443/sleep?duration=100us'
+
+Request blocks expand URLs and '--vary' values before roles and supply are
+applied. A baseline block's supply therefore belongs independently to every
+expanded template. Finite control allocation visits each template in canonical
+expansion order before taking a second instance from any template, then
+repeats that layered pass while supply remains. Unlimited allocation cycles
+through the templates in the same order.
+
+Configured aggregate supply is preserved even when a comparison cannot use all
+of it. The effective baseline cap is at most effective width minus one because
+every comparison contains a candidate. Reports show configured supply and this
+separate cap. Supply is simultaneous capacity per comparison and is reusable
+in later comparisons; it is not a run-wide request budget. Three expanded
+templates with supply two offer six reusable copies per comparison; at most
+width minus one fit beside a candidate. For example:
+
+  tturl detect --direction either --width 3 --comparisons-max 200 \
+    --block https://example.com/candidate \
+    --block https://example.com/control --baseline-only --baseline-supply 2
+
+Baseline blocks reject '--repeat'; '--baseline-supply' sets reusable capacity.
+
+tturl reports requested and effective width when '--width' is explicit.
+Confirm a surprising negative from a wider design with '--width' 2.
+
+'--padding' and '--padding-at' define a position-indexed padding schedule for
+evidence-bearing comparisons. The schedule is resolved once against the
+effective width and remains fixed as candidates are eliminated and filler
+peers are reused. Candidate identities are assigned uniformly to positions
+before padding is applied. Padding is a recorded heuristic delivery condition;
+it does not remove position bias or change the guarantee. See:
+
+  tturl help padding
+
+As evidence accumulates, the search focuses on unresolved candidates and drops
+those it can rule out. Candidates therefore receive different sample counts. A
+sample is one comparison in which a candidate participated while still in
+contention. A ruled-out candidate may later be reused only to fill a batch.
+That reuse counts as a request participation, not another sample. Physical
+work includes baseline and filler positions in rank-complete comparisons;
+failed comparison operations are reported separately. Inferential samples
+include only completed comparisons while each candidate was in contention.
+Physical and inferential means are descriptive across changing opponents,
+rather than calibrated effect estimates.
+
+'--connections' sets the maximum number of concurrent comparisons directly.
+'--connections-fit' selects HTTP/2 PING fitting with a finite pacing limit.
+Rates alone pace work with up to one connection.
+
+The resulting concurrency sets the largest adaptive wave. Every comparison in
+a wave is planned before the wave starts, and all its outcomes are combined
+before the next adaptive choice. More concurrency can reduce wall-clock time
+but increases target contention. Recheck a marginal result with less
+concurrency.
+
+'--batch-rate-max' also caps comparison starts across the connection pool.
+It is a maximum offered rate, not promised throughput. For fitting assumptions
+and operational cautions, see:
+
+  tturl help delivery
+
+## Set error risks, edge, and budget
+
+'--false-positive-risk' P bounds the prospective family-wise risk of falsely
+naming any candidate as an outlier. '--false-negative-risk' P separately
+bounds the prospective risk of ruling out a qualifying outlier. The defaults
+are 0.01 and 0.05, respectively, and both must lie strictly in (0, 1). Naming
+a request usually carries the greater practical cost, so the default asks for
+stronger positive evidence without tightening the negative boundary. These are
+repeated-run error bounds under the stated premise, not posterior
+probabilities that this result is right or wrong, and they do not form one
+joint bound.
+
+The defaults apply to one decision. For a campaign making at most N decisions
+with a campaign false-positive budget A, setting each false-positive risk to
+A/N is a conservative allocation that does not assume independent decisions.
+Automated campaigns should set both risks explicitly.
+
+'--edge' EDGE is the positive, dimensionless minimum target advantage covered
+by elimination's false-negative guarantee. The default is 0.02 and the value
+must lie strictly in (0, 0.5). Positive evidence adapts independently of edge:
+a smaller effect can still produce a found result.
+
+For ordinary normalised arrival rank R, first is 0 and last is 1:
+
+  Search  Directional score  Example mean R  Apparent edge
+  late    R                  0.8             0.8 - 0.5 = 0.3
+  early   1 - R              0.2             0.8 - 0.5 = 0.3
+
+Raw mean rank can exceed one in wider batches; the edge uses the normalised
+scale. With '--edge' 0.2, the false-negative guarantee applies to a target
+sustaining a directional conditional mean of at least 0.7 under the stated
+premise. A target with mean 0.6 falls outside that guarantee, although it can
+still be found. A smaller edge covers subtler targets but usually costs more
+comparisons; a decision within the budget is not guaranteed.
+
+Peer-relative tturl detect requires the target to sustain the advantage in
+each adaptively scheduled reference set under its conditional-mean premise.
+Baseline-relative evidence uses the fraction of selected controls arriving
+before the candidate for late, reversed for early, rather than necessarily its
+rank among every request in the comparison. An aggregate average from tturl
+measure does not establish the required conditional bound.
+
+'--comparisons-max' N caps solver-recorded comparisons. The default is 50,000.
+At the default width, that permits at most 100,000 measured request
+participations. A finite limit N permits at most N times the effective width;
+an explicit width of eight permits at most 400,000 participations under the
+default limit. Reaching a finite limit returns an inconclusive result with
+successful completion. It is not a negative finding.
+
+A limit of one deterministically ends this two-candidate search inconclusive:
+
+  tturl detect -k --direction late --comparisons-max 1 \
+    --block 'https://127.0.0.1:8443/sleep?duration=100us' --name first \
+    --block 'https://127.0.0.1:8443/sleep?duration=100us' --name second
+
+Use '--comparisons-max' unlimited only as an explicit choice to continue until
+a decision or interruption:
+
+  tturl detect -k --direction late --comparisons-max unlimited \
+    --block 'https://127.0.0.1:8443/sleep?duration=100us' --name first \
+    --block 'https://127.0.0.1:8443/sleep?duration=5000us' --name second
+
+tturl records a failed comparison without retry because the target may already
+have processed part of its request batch.
+
+Account for failed work in the target-exposure budget. See:
+
+  tturl help design
+
+## Prime each adaptive connection
+
+'--warmup' N makes N priming attempts on every connection before that
+connection contributes comparisons. tturl detect requires at least one
+distinct request block marked '--warmup-only'; it never chooses candidates as
+priming work. Each attempt sends that batch in authored order and is excluded
+from solver evidence.
+
+Workers prime independently, so a ready connection can proceed without a run-
+wide barrier. A connection-fatal priming failure permits one replacement for
+that worker, and the replacement repeats the complete sequence. A second fatal
+failure or replacement acquisition failure makes the decision unavailable. A
+stream-scoped incomplete priming batch consumes its attempt.
+
+The Experiment section reports initial priming request operations and the
+maximum with one replacement per worker. Execution reports each attempt,
+connection identity, incomplete attempt, acquisition failure, and replacement.
+Priming obeys the same request and batch pacing as comparisons. See:
+
+  tturl help delivery
+
+## Bound response work
+
+'--response-body-max' SIZE caps accepted response DATA per stream. The default
+is 8 MiB. '--batch-timeout' DURATION caps transport time for each priming or
+comparison batch attempt. The default is 30s. Both also accept unlimited.
+
+Crossing either local limit makes the result unavailable. tturl discards the
+affected connection and stops the run without retrying, priming a replacement,
+or admitting ranks from the incomplete adaptive wave. The Experiment section
+records both resolved limits. JSON failure details use stable codes
+response_body_limit and batch_timeout.
+
+For example, this deliberately small body limit demonstrates an unavailable
+result when either response exceeds four accepted DATA bytes:
+
+  tturl detect -k --direction late --response-body-max 4B \
+    --block 'https://127.0.0.1:8443/' --name first \
+    --block 'https://127.0.0.1:8443/missing' --name second
+
+For shared units, timeout boundaries, and transport semantics, see:
+
+  tturl help delivery
+
+## Read the outcome
+
+The report has one of four states:
+
+  found         evidence names one early or late arrival-order outlier
+  negative      no matching outlier detected at the configured minimum edge
+  inconclusive  the comparison limit ended before either decision
+  unavailable   acquisition stopped or failed without a valid decision
+
+A found result controls the family-wise false-positive risk under the reported
+premise. A negative result controls its false-negative risk only for the
+configured direction, edge, and premise. It does not prove equality or exclude
+a weaker effect. Inconclusive and unavailable results carry no guarantee and
+do not show that an outlier is absent or that the field is otherwise uniform.
+
+For a found result, positive log evidence reaches the reported commit
+threshold in natural-log units. The configured '--edge' does not enter that
+positive evidence. A negative result reports the normalised-rank edge it
+excludes.
+
+Exit status is separate from outcome. Found, negative, and finite-budget
+inconclusive results exit zero when reporting succeeds. Interrupting tturl
+detect before a decision writes an unavailable result with stopped completion
+and exits one, for both bounded and unbounded searches. Other unavailable
+results and operational failures also exit one. Usage errors exit two.
+
+A downstream reader that closes a stdout pipe is a consumer-controlled stop,
+not a detect decision; it exits zero and may omit the terminal result.
+
+Scripts must inspect the reported outcome and completion state.
+
+The candidate table is exploratory. It sorts sampled requests by observed mean
+rank. Candidates may have met different peers during different adaptive
+phases, so their means do not form a like-for-like ranking.
+
+Text shows four rows from each end by default. '--rank-rows' N changes that
+count. '--rank-rows' all shows every sampled candidate. '--pin' PIN retains a
+matching label or named fan in a bounded view. Unsampled candidates appear
+separately. These options affect presentation only.
+
+## Structured adaptive evidence
+
+tturl detect uses tturl.detect/v1. A complete stream contains one run,
+every candidate, baseline template and warmup request, and one terminal result.
+Request records provide dense global request_id values and their roles. Each
+baseline's supply_limit is a positive integer or null for unlimited supply.
+
+The run's plan groups requested and effective width, comparison_limit,
+padding, warmup and initial/maximum priming request operations. Acquisition
+records response limits, resolved delivery and in_flight_comparison_limit. The
+sibling method records its ID, requested/resolved strategy, canonical
+direction, false_positive_risk, false_negative_risk and edge. The method ID
+identifies allocation, evidence, scheduling, position randomisation and
+stopping rules.
+
+Result detection.state is available or unavailable. Available detection has a
+finding with status found, negative or inconclusive and the commit threshold
+in natural-log units. Found identifies a candidate request_id and its observed
+direction. Found and negative carry the ranking method's actual error-risk
+guarantee. Negative also records excluded_edge, equal to method.edge.
+Unavailable detection retains legitimate partial evidence; completion.failure
+records the runtime cause.
+
+Each detection.requests entry joins the catalogue by request_id. Its physical
+facet records participations and raw/normalised mean rank. Candidate
+inference, when available, records samples, means, positive/elimination log
+evidence and elimination status. An eliminated candidate reused as filler can
+have more physical participations than inferential samples:
+
+  {"request_id": 0,
+   "physical": {"participations": 12, "mean_rank": 1.25,
+                "normalised_mean_rank": 0.625},
+   "inference": {"samples": 5, "mean_rank": 1.4,
+                 "normalised_mean_rank": 0.7, ...},
+   "status_counts": [...], ...}
+
+Physical participations across candidates and baselines equal execution's
+retained request operations. Baselines have physical evidence; solver samples
+belong to candidates. status_varied and non_2xx_observed attach to each
+request. status_distributions_differ compares participating requests across
+both roles. Priming and failure entries use worker_id and connection_id.
+Comparison failures preserve explicit request_id/position assignments and a
+common failure object.
+
+tturl detect drains response bodies and hashes every body byte received, while
+retaining no body prefixes, response header maps, or trailers. Every decoded
+header section remains subject to the shared 1 MiB limit in 'tturl help
+output'.
+
+For shared framing, schema, joins, and partial-stream handling, see:
+
+  tturl help json
+
+## Examples
+
+### Known-direction zero-or-one search
+
+Use the default Peer First strategy when the field has at most one late target
+and its peers form a defensible reference population:
+
+  tturl detect -k --direction late --comparisons-max 200 \
+    --block 'https://127.0.0.1:8443/sleep?duration=100us' --repeat 2 \
+    --name reference \
+    --block 'https://127.0.0.1:8443/sleep?duration=5000us' --name candidate
+
+Inspect the reported premise as well as the finding. The result neither
+estimates the time gap nor identifies its cause.
+
+### Known direction with several possible targets
+
+Use a varied candidate block and a representative early baseline when several
+candidates could be late. Auto selects Baseline Reserved:
+
+  tturl detect -k --direction late --width 4 --comparisons-max 200 \
+    --block 'https://127.0.0.1:8443/sleep?duration=D' \
+    --vary 'D={100us,5ms,6ms}' --name candidate \
+    --block 'https://127.0.0.1:8443/sleep?duration=100us' \
+    --baseline-only --baseline-supply unlimited --name reference
+
+The reference must represent the conditional mean boundary for every
+candidate; matching one candidate's duration does not establish that property
+by itself.
+
+### Either-direction search
+
+Search both extremes only against a representative baseline:
+
+  tturl detect -k --direction either --width 3 --comparisons-max 200 \
+    --block 'https://127.0.0.1:8443/sleep?duration=10us' --name candidate-a \
+    --block 'https://127.0.0.1:8443/sleep?duration=5000us' --name candidate-b \
+    --block 'https://127.0.0.1:8443/sleep?duration=1000us' \
+    --baseline-only --baseline-supply unlimited --name reference
+
+Inspect whether the found direction and response facts fit the intended
+comparison. Allocate both error risks across a campaign of repeated searches.
+
+## Next steps
+
+  tturl help race      Inspect candidate requests and responses when needed
+  tturl help measure   Give every candidate the same fixed experiment instead
+  tturl help design    Check whether the outlier model and load conditions fit

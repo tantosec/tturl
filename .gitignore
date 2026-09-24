@@ -1,0 +1,31 @@
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Transient editor files
+*.swp
+*.swo
+*~
+
+# Repository build and release outputs
+/bin/
+/dist/
+/.cspell/node_modules/
+/tturl
+*.exe
+
+# Go test and diagnostic outputs
+*.test
+*.prof
+coverage.out
+coverage.html
+
+# Local repository extensions
+/Makefile.local
+/.claude/settings.local.json
+AGENTS.override.md
+CLAUDE.local.md
+
+# TLS key logs may contain session secrets
+tls-secrets.txt
+ssl-secrets.txt

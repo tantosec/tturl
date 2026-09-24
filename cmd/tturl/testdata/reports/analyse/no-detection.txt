@@ -1,0 +1,71 @@
+================================================================================
+                                 tturl analyse
+================================================================================
+
+----------------------------------- Requests -----------------------------------
+
+Target: https://example.test
+
+  control    GET  /request/0
+  candidate  GET  /request/1
+
+Total: 2 requests.
+
+---------------------------------- Experiment ----------------------------------
+
+Design: 6 balanced rotation cycles (12 trials, 24 measured request operations).
+Arrangement: rotate; each request occupies every position once per cycle.
+Priming: none; early trials may include cold-state effects.
+Sensitivity: 6 cycles is below the 150-cycle modelled default; this run has
+             lower sensitivity than the validated planning target.
+Power: the fixed workload is a power choice, not a guarantee for this target.
+Pacing: 2 requests/batch; batch-rate ceiling unlimited; request-rate ceiling
+        unlimited; minimum batch-start interval unconstrained.
+Connections: up to 1 active (default).
+Streams: honour the peer's advertised concurrent-stream limit.
+Response limits: 8MiB accepted body per stream; 30s transport time per batch.
+Run timeout: unlimited for live request execution.
+
+------------------------------- Analysis result --------------------------------
+
+Finding: No request-dependent arrival-order effect detected. This is not
+         evidence of equivalence.
+Evidence: 6 cycles; 12 trials; 24 measured request operations.
+Overall test across all requests:
+  Exact randomisation: p=1 > 0.05.
+  Reference distribution: all 64 randomisations evaluated.
+
+Rank profile (first -> last):
+  Intensity (% upper bound): . 0 | : 12.5 | - 25 | = 37.5 | + 50
+                             * 62.5 | # 75 | % 87.5 | @ 100
+  request    profile      mean  normalised
+  control    [++++++++]   0.50        0.50
+  candidate  [++++++++]   0.50        0.50
+
+Rank counts (columns are ranks 0..1; 12 retained trials):
+  control    [ 6  6 ]
+  candidate  [ 6  6 ]
+
+Pair comparisons: not tested without a field-wide detection.
+
+----------------------------- HTTP status outcomes -----------------------------
+
+HTTP 200 for all 24 ranked responses.
+
+-------------------------------- Position check --------------------------------
+
+Mean ranks: 0.50-0.50 across outbound positions (spread 0.00).
+
+---------------------------------- Execution -----------------------------------
+
+Trials: 12/12 attempted; 12 rank-complete; 0 incomplete; 12 retained; 0
+        excluded; 0 unattempted.
+Cycles: 6/6 attempted; 6 complete; 0 incomplete; 6 retained; 0 unattempted.
+Connections: 1 planned; 1 observed; 0 replacements.
+Measured request operations: 24 attempted; 24 rank-complete; 24 retained.
+
+------------------------------------ Method ------------------------------------
+
+Global A=max(L2,Linf/sqrt(2)): A=0, L2=0, Linf=0.
+Calibration: exact_randomisation; alpha=0.05.
+Calibration completion: exact_orbit_complete.

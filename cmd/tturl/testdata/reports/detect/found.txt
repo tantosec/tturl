@@ -1,0 +1,67 @@
+================================================================================
+                                  tturl detect
+================================================================================
+
+----------------------------------- Requests -----------------------------------
+
+Target: https://example.test
+
+  reference-a  GET  /request/0
+  reference-b  GET  /request/1
+  candidate    GET  /request/2
+
+Total: 3 requests.
+
+---------------------------------- Experiment ----------------------------------
+
+Search: late arrival-order outlier among 3 candidates; effective width 3.
+Strategy: requested auto; resolved peer-first; solver method
+          "ranking/outlier/peer-first-bounded-betting/v1beta1".
+Scheduling: up to 1 in-flight comparison.
+Evidence updates: complete atomic waves.
+Dependence: arbitrary within an atomic wave.
+Baselines: none.
+Risk bounds: false-positive 1.0%; false-negative 5.0%.
+Negative boundary: minimum normalised-rank edge 0.02.
+Budget: up to 100 adaptive comparisons (300 measured request participations).
+Priming: none; early comparisons per connection may include cold-state effects.
+Pacing: batch-rate ceiling unlimited; request-rate ceiling unlimited; minimum
+        batch-start interval unconstrained.
+Connections: up to 1 active (default).
+Streams: honour the peer's advertised concurrent-stream limit.
+Response limits: 8MiB accepted body per stream; 30s transport time per batch.
+Run timeout: unlimited for live request execution.
+
+------------------------------- Detection result -------------------------------
+
+Finding: Evidence identifies request candidate as the late arrival-order outlier
+Evidence: positive log evidence reached the configured natural-log commit
+          threshold after 17 samples; observed mean rank 2.00 of 2.
+Guarantee: family-wise false-positive risk at most 1.0%.
+Negative scope: configured negative edge 0.02; positive evidence does not use
+                this edge.
+Inference: Anytime-valid; premise code "scheduled-reference conditional mean".
+Premise: Each non-outlier's conditional mean normalised rank is at most halfway
+         toward the late extreme in every adaptively scheduled peer set.
+Field coverage: 3 of 3 candidates sampled.
+Physical work: 36 request participations in rank-complete comparisons.
+Inferential samples: completed comparisons while each candidate was in
+                     contention; filler reuse after elimination adds physical
+                     work, not new samples.
+Inferential allocation: other sampled candidates median 9.5 samples, range 8-11.
+
+Exploratory candidate means (adaptive samples are not directly comparable):
+  request      mean rank  samples
+  reference-a       0.75        8
+  reference-b       1.25       11
+  candidate         2.00       17  <- selected
+
+----------------------------- HTTP status outcomes -----------------------------
+
+HTTP 204 for all 36 request participations.
+
+---------------------------------- Execution -----------------------------------
+
+Comparisons: 12 attempted; 12 rank-complete; 0 incomplete; maximum 100.
+Measured request operations: 36 attempted; 36 rank-complete; 36 retained.
+Connections: 1 planned; 1 observed; 0 replacements.

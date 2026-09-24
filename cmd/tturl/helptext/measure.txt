@@ -1,0 +1,187 @@
+tturl measure repeats one fixed batch and describes how each response ranked
+relative to its peers across trials. It reports rank distributions, pairwise
+order, position behaviour, and execution evidence. The results are descriptive.
+The command does not make a statistical finding.
+
+Use tturl measure when every request should receive the same trials and the
+shape of the ordering matters.
+
+## Choose a trial or cycle budget
+
+tturl measure requests 20 trials by default. Each trial contains every request
+in the batch. The batch must contain at least two requests.
+
+'--trials' N sets a positive trial count. With the default rotate arrangement,
+tturl measure rounds it up to a complete position cycle and reports the
+requested and planned counts. A complete cycle contains one trial per request.
+
+'--cycles' N sets the budget directly in complete rotation cycles. It requires
+the rotate policy, which is the default; '--arrange' can be omitted. It replaces
+the omitted default trial budget and conflicts with an explicit '--trials'. The
+none and random policies cannot use '--cycles'.
+
+For width W:
+
+  trials per cycle              W
+  request operations per cycle  W * W
+
+For three measured requests, the default 20 requested trials round up to 21
+planned trials, seven cycles and 63 measured request operations. Ten cycles with
+arrangement omitted plan 30 trials and 90 measured request operations. None or
+random with 20 trials keeps exactly 20 trials.
+
+Complete cycles preserve position balance but need not be independent samples.
+
+'--warmup' N sends N unmeasured trials on each acquired connection before that
+connection's measured work. Warmups appear separately in Execution. They do not
+enter rank, status, position, or pairwise summaries.
+
+Mark one or more blocks '--warmup-only' to use a distinct authored-order priming
+batch. Unmarked blocks remain the measured batch. Without a marked block,
+warmups retain the measured batch and arrangement. See tturl help delivery for
+the connection-local contract.
+
+'--padding' and '--padding-at' attach synthetic fields to measured outbound
+positions. The resolved schedule follows positions through arrangement and is
+recorded in the report. See tturl help padding before treating it as a control.
+
+## Choose an arrangement
+
+'--arrange' rotate is the default. Each cycle starts with one shuffle, then
+cyclically shifts that order once per trial to balance positions exactly.
+
+'--arrange' random shuffles independently for every trial. It balances positions
+only in expectation and accepts any positive trial count. If some trials fail,
+each remaining rank-complete trial can still enter the ranking.
+
+'--arrange' none preserves authored order. It can reveal a position-linked
+pattern, but cannot separate request identity from outbound position.
+
+## Read the ranking
+
+Rank 0 marks the first response. The final rank is the batch width minus one.
+
+Mean rank averages those ordinal observations for one request. Normalised mean
+rank runs from 0 to 1. It is the average fraction of peer responses that arrived
+before that request.
+
+The mean can hide the shape of a distribution. A request that always arrives in
+the middle can share a mean with one alternating between first and last. The
+profile shows that shape. The Rank counts table gives the exact observations:
+
+  request  profile      mean  normalised
+  fast     [@@@@....]   0.00        0.00
+  slow     [....@@@@]   1.00        1.00
+
+  Rank counts (columns are ranks 0..1; 20 retained trials):
+    fast     [ 20   0 ]
+    slow     [  0  20 ]
+
+Profile intensity rises through . : - = + * # % @. Profiles use eight cells up
+to batch width 16 and sixteen above it, combining adjacent ranks when needed.
+Rank counts remains exact.
+
+Pairwise precedence gives the fraction of retained trials in which each row's
+response arrived before each column's. The complete square matrix is always
+printed and may be wide. Its values are descriptive, not significance tests.
+
+  Pairwise precedence (row-before-column fraction):
+    request  fast  slow
+    fast        -  1.00
+    slow     0.00     -
+
+## Limit the ranking rows
+
+By default, the Rank profile and Rank counts tables contain one row per request,
+ordered from lowest to highest mean rank. '--rank-rows' N keeps N rows at each
+end of that order. When '--rank-rows' bounds these tables, '--pin' PIN keeps a
+matching label or named fan visible. Repeat the option for additional matches.
+The Pairwise precedence matrix remains complete.
+
+These options affect only text. JSON retains every request and all evidence.
+
+## Check the supporting evidence
+
+tturl records a rank when final response headers arrive, but the response stream
+may still have a body or trailers to deliver. A later stream reset leaves that
+rank intact but makes the trial incomplete. tturl includes a trial in the
+ranking only when every request received a rank and the batch finished without a
+transport error. The report calls such trials rank-complete.
+
+HTTP status outcomes summarise responses from retained trials. HTTP status does
+not determine rank completeness. Non-2xx outcomes and statuses that change
+across retained trials receive a review note but remain part of the ranking.
+Response details are available from tturl race when needed.
+
+tturl measure drains and hashes accepted response bodies while retaining no body
+prefixes, response header maps, or trailers. The defaults are an 8 MiB
+per-response receive limit and a 30s batch timeout. When a batch crosses either
+limit, tturl records an incomplete trial and closes the connection. Every
+decoded header section remains subject to the shared 1 MiB limit in 'tturl help
+output'. For the response-work contract, see:
+
+  tturl help delivery
+
+Position check groups ranks by outbound position. Under complete rotation, each
+request contributes equally to every position. Any remaining difference
+describes position behaviour averaged across request identities. The spread has
+no universal good or bad threshold.
+
+Random arrangement reports its assignment-count ranges. Fixed arrangement
+confounds identity with position.
+
+Execution reconciles the plan with acquisition:
+
+  requested      trial-equivalent count before any rotation round-up
+  planned        trial count after any rotation round-up
+  attempted      measured trials with a transport outcome
+  rank-complete  transport-complete trials with one rank per request
+  incomplete     trials whose batch transport returned an error
+  retained       rank-complete trials included in the ranking
+  excluded       rank-complete trials in an incomplete rotation cycle
+  unattempted    planned trials with no yielded outcome
+  warmup         priming attempts, never ranked
+
+Under rotation, only complete cycles enter the ranking and Position check. A
+failed trial is not replaced. Its complete siblings are recorded as excluded.
+
+Interruption records stopped completion and any retained descriptive evidence,
+but unfinished bounded measurement work exits one.
+
+## Aggregate JSONL
+
+A normally completed '--report' json stream contains a run record, concrete
+request records, and one aggregate result. The plan preserves requested trial
+or cycle work and resolved trials. measurement contains request and position
+statistics with sparse rank counts; omitted ranks have zero observations.
+Pairwise precedence rows use before_request_ids and columns after_request_ids.
+Assignment rows use request_ids and columns positions. Each matrix has explicit,
+canonically ordered axes. Status variation, non-2xx observations and reset
+counts belong to each request. Position balance and spread are derived checks.
+The result separates completion, execution and measurement availability;
+unavailable measurement has reason no_retained_trials. Partial descriptive
+evidence survives interruption. Acquisition failures identify measured trials
+or warmup attempts and their connection_id, code and diagnostic message.
+
+For shared framing, schema, joins, and partial-stream handling, see:
+
+  tturl help json
+
+## Example
+
+Run ten complete rotation cycles against the demo server with tturl measure:
+
+  tturl measure -k --cycles 10 \
+    --block 'https://127.0.0.1:8443/sleep?duration=100us' --name fast \
+    --block 'https://127.0.0.1:8443/sleep?duration=5000us' --name slow
+
+This resolves to 20 trials and 40 measured request operations.
+
+Fast should rank near 0 and slow near 1. Because rotation balances outbound
+positions, both positions should have a mean rank near 0.5 in Position check.
+
+## Next steps
+
+  tturl help race      Inspect individual responses behind an unexpected result
+  tturl help analyse   Test the fixed batch when description is not enough
+  tturl help design    Check position, load, and sensitivity before interpreting

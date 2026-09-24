@@ -1,0 +1,11 @@
+{
+  "name": "tturl-development-tools",
+  "private": true,
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "devDependencies": {
+    "@cspell/dict-en-au": "1.1.22",
+    "cspell": "10.2.2"
+  }
+}

@@ -1,0 +1,50 @@
+name: Go package bug
+description: Report a problem with one of the Go packages.
+labels:
+  - bug
+  - go-package
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Report vulnerabilities privately as described in
+        [SECURITY.md](https://github.com/tantosec/tturl/security/policy).
+
+  - type: input
+    id: package
+    attributes:
+      label: Affected package
+      placeholder: github.com/tantosec/tturl/tth2
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the behaviour you observed and what you expected.
+    validations:
+      required: true
+
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Provide the module version or commit and the Go version.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: If available, provide a minimal program or sequence of steps.
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+    validations:
+      required: false

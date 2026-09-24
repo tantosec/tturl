@@ -1,0 +1,2289 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/tantosec/tturl/main/cmd/tturl/doc/schemas/tturl-time-v1.schema.json",
+  "title": "tturl time JSON Lines record",
+  "description": "One record of request-duration evidence. Validate record shape separately from run, request catalogue, evidence and result sequencing. Byte-bearing strings follow the shared wire encoding. Nanosecond observations use signed integer offsets from the trial or priming anchor; null requires an explicit missing reason.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/run"
+    },
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/phase"
+    },
+    {
+      "$ref": "#/$defs/warmup"
+    },
+    {
+      "$ref": "#/$defs/trial"
+    },
+    {
+      "$ref": "#/$defs/result"
+    }
+  ],
+  "$defs": {
+    "count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 18446744073709551615
+    },
+    "positive_id": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 18446744073709551615
+    },
+    "protocol": {
+      "enum": [
+        "h2",
+        "http/1.1"
+      ]
+    },
+    "offset_ns": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": -9223372036854775808,
+      "maximum": 9223372036854775807
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "header_map": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "failure": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/failure_detail"
+        }
+      ]
+    },
+    "run_envelope": {
+      "type": "object",
+      "required": [
+        "kind",
+        "tool",
+        "argv",
+        "started_at",
+        "request_count"
+      ],
+      "properties": {
+        "kind": {
+          "const": "run"
+        },
+        "tool": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/tool"
+        },
+        "argv": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "request_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 18446744073709551615
+        }
+      }
+    },
+    "experiment": {
+      "type": "object",
+      "required": [
+        "requested_trials",
+        "planned_trials",
+        "connection_ceiling",
+        "planned_request_operations",
+        "warmup",
+        "width",
+        "destinations",
+        "workers",
+        "connections_per_worker",
+        "effective_connections",
+        "arrangement",
+        "synchronise",
+        "single_record",
+        "last_byte_sync",
+        "capture_headers",
+        "capture_body",
+        "release_delay_ns",
+        "request_timeout_ns",
+        "run_timeout_ns",
+        "batch_rate_max_per_second",
+        "request_rate_max_per_second",
+        "receive_header_max_bytes",
+        "response_body_max_bytes",
+        "capture_body_max_bytes",
+        "pools",
+        "trials_unlimited",
+        "tls",
+        "measured_request_ids",
+        "priming_request_ids",
+        "requested_connections",
+        "distinct_priming_set",
+        "warmup_width",
+        "planned_initial_warmup_trials",
+        "planned_initial_warmup_operations"
+      ],
+      "properties": {
+        "requested_trials": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/count",
+              "minimum": 1
+            }
+          ]
+        },
+        "planned_trials": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/count",
+              "minimum": 1
+            }
+          ]
+        },
+        "connection_ceiling": {
+          "$ref": "#/$defs/count"
+        },
+        "planned_request_operations": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/count",
+              "minimum": 1
+            }
+          ]
+        },
+        "warmup": {
+          "$ref": "#/$defs/count"
+        },
+        "width": {
+          "$ref": "#/$defs/positive_id"
+        },
+        "destinations": {
+          "$ref": "#/$defs/positive_id"
+        },
+        "workers": {
+          "$ref": "#/$defs/positive_id"
+        },
+        "connections_per_worker": {
+          "$ref": "#/$defs/positive_id"
+        },
+        "effective_connections": {
+          "$ref": "#/$defs/positive_id"
+        },
+        "arrangement": {
+          "enum": [
+            "none",
+            "rotate",
+            "random"
+          ]
+        },
+        "synchronise": {
+          "type": "boolean"
+        },
+        "single_record": {
+          "type": "boolean"
+        },
+        "last_byte_sync": {
+          "type": "boolean"
+        },
+        "capture_headers": {
+          "type": "boolean"
+        },
+        "capture_body": {
+          "type": "boolean"
+        },
+        "release_delay_ns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        },
+        "request_timeout_ns": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "maximum": 9223372036854775807,
+          "exclusiveMinimum": 0
+        },
+        "run_timeout_ns": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "maximum": 9223372036854775807,
+          "exclusiveMinimum": 0
+        },
+        "batch_rate_max_per_second": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "request_rate_max_per_second": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "receive_header_max_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9223372036854771711
+        },
+        "response_body_max_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "maximum": 9223372036854775807,
+          "exclusiveMinimum": 0
+        },
+        "capture_body_max_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        },
+        "pools": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/pool"
+          },
+          "minItems": 1
+        },
+        "trials_unlimited": {
+          "type": "boolean"
+        },
+        "tls": {
+          "$ref": "#/$defs/tls_policy"
+        },
+        "measured_request_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/count"
+          },
+          "uniqueItems": true,
+          "minItems": 1
+        },
+        "priming_request_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/count"
+          },
+          "uniqueItems": true
+        },
+        "requested_connections": {
+          "$ref": "#/$defs/count"
+        },
+        "distinct_priming_set": {
+          "type": "boolean"
+        },
+        "warmup_width": {
+          "$ref": "#/$defs/count"
+        },
+        "planned_initial_warmup_trials": {
+          "$ref": "#/$defs/count"
+        },
+        "planned_initial_warmup_operations": {
+          "$ref": "#/$defs/count"
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "capture_body": {
+                "const": false
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "capture_body_max_bytes": {
+                "const": 0
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "capture_body_max_bytes": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "exclusiveMinimum": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "trials_unlimited": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "requested_trials": {
+                "type": "null"
+              },
+              "planned_trials": {
+                "type": "null"
+              },
+              "planned_request_operations": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "requested_trials": {
+                "$ref": "#/$defs/count",
+                "minimum": 1
+              },
+              "planned_trials": {
+                "$ref": "#/$defs/count",
+                "minimum": 1
+              },
+              "planned_request_operations": {
+                "$ref": "#/$defs/count",
+                "minimum": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "pool": {
+      "type": "object",
+      "required": [
+        "pool_id",
+        "scheme",
+        "host",
+        "port",
+        "dial_address",
+        "protocol",
+        "request_ids",
+        "priming_request_ids",
+        "width"
+      ],
+      "properties": {
+        "pool_id": {
+          "$ref": "#/$defs/count"
+        },
+        "scheme": {
+          "enum": [
+            "http",
+            "https"
+          ]
+        },
+        "host": {
+          "type": "string"
+        },
+        "port": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        },
+        "dial_address": {
+          "type": "string"
+        },
+        "protocol": {
+          "$ref": "#/$defs/protocol"
+        },
+        "request_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/count"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "priming_request_ids": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/count"
+          },
+          "uniqueItems": true
+        },
+        "width": {
+          "$ref": "#/$defs/positive_id"
+        }
+      },
+      "additionalProperties": false
+    },
+    "run": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/run_envelope"
+        },
+        {
+          "type": "object",
+          "required": [
+            "schema",
+            "command",
+            "experiment",
+            "extractors"
+          ],
+          "properties": {
+            "schema": {
+              "const": "tturl.time/v1"
+            },
+            "command": {
+              "const": "time"
+            },
+            "experiment": {
+              "$ref": "#/$defs/experiment"
+            },
+            "extractors": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/extractor"
+              }
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "request": {
+      "type": "object",
+      "required": [
+        "kind",
+        "request_id",
+        "request_set",
+        "label",
+        "protocol",
+        "method",
+        "url",
+        "headers",
+        "body",
+        "declared_content_length",
+        "pseudo_headers",
+        "length_mismatch"
+      ],
+      "properties": {
+        "kind": {
+          "const": "request"
+        },
+        "request_id": {
+          "$ref": "#/$defs/count"
+        },
+        "request_set": {
+          "enum": [
+            "measured",
+            "priming"
+          ]
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[ -~]+$"
+        },
+        "protocol": {
+          "$ref": "#/$defs/protocol"
+        },
+        "method": {
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "type": "string"
+        },
+        "headers": {
+          "$ref": "#/$defs/header_map"
+        },
+        "body": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/request_body"
+        },
+        "declared_content_length": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        },
+        "pseudo_headers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "length_mismatch": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "protocol": {
+                "const": "h2"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "pseudo_headers": {
+                "required": [
+                  ":method",
+                  ":scheme",
+                  ":authority",
+                  ":path"
+                ],
+                "propertyNames": {
+                  "enum": [
+                    ":method",
+                    ":scheme",
+                    ":authority",
+                    ":path"
+                  ]
+                }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "pseudo_headers": {
+                "maxProperties": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "timing": {
+      "type": "object",
+      "required": [
+        "initial_release_ns",
+        "final_release_ns",
+        "write_complete_ns",
+        "first_response_headers_ns",
+        "final_response_headers_ns",
+        "response_complete_ns",
+        "duration_ns",
+        "missing_reasons"
+      ],
+      "properties": {
+        "initial_release_ns": {
+          "$ref": "#/$defs/offset_ns"
+        },
+        "final_release_ns": {
+          "$ref": "#/$defs/offset_ns"
+        },
+        "write_complete_ns": {
+          "$ref": "#/$defs/offset_ns"
+        },
+        "first_response_headers_ns": {
+          "$ref": "#/$defs/offset_ns"
+        },
+        "final_response_headers_ns": {
+          "$ref": "#/$defs/offset_ns"
+        },
+        "response_complete_ns": {
+          "$ref": "#/$defs/offset_ns"
+        },
+        "duration_ns": {
+          "$ref": "#/$defs/offset_ns"
+        },
+        "missing_reasons": {
+          "type": "object",
+          "propertyNames": {
+            "enum": [
+              "initial_release_ns",
+              "final_release_ns",
+              "write_complete_ns",
+              "first_response_headers_ns",
+              "final_response_headers_ns",
+              "response_complete_ns",
+              "duration_ns"
+            ]
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "initial_release_ns": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "missing_reasons": {
+                "required": [
+                  "initial_release_ns"
+                ]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "missing_reasons": {
+                "not": {
+                  "required": [
+                    "initial_release_ns"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "final_release_ns": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "missing_reasons": {
+                "required": [
+                  "final_release_ns"
+                ]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "missing_reasons": {
+                "not": {
+                  "required": [
+                    "final_release_ns"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "write_complete_ns": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "missing_reasons": {
+                "required": [
+                  "write_complete_ns"
+                ]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "missing_reasons": {
+                "not": {
+                  "required": [
+                    "write_complete_ns"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "first_response_headers_ns": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "missing_reasons": {
+                "required": [
+                  "first_response_headers_ns"
+                ]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "missing_reasons": {
+                "not": {
+                  "required": [
+                    "first_response_headers_ns"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "final_response_headers_ns": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "missing_reasons": {
+                "required": [
+                  "final_response_headers_ns"
+                ]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "missing_reasons": {
+                "not": {
+                  "required": [
+                    "final_response_headers_ns"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "response_complete_ns": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "missing_reasons": {
+                "required": [
+                  "response_complete_ns"
+                ]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "missing_reasons": {
+                "not": {
+                  "required": [
+                    "response_complete_ns"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "duration_ns": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "missing_reasons": {
+                "required": [
+                  "duration_ns"
+                ]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "missing_reasons": {
+                "not": {
+                  "required": [
+                    "duration_ns"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "response": {
+      "type": "object",
+      "required": [
+        "status",
+        "content_length",
+        "received_body_bytes",
+        "body_bytes",
+        "sha256",
+        "length_mismatch",
+        "complete",
+        "reset",
+        "truncated",
+        "headers",
+        "trailers",
+        "body",
+        "body_captured_bytes",
+        "body_captured_complete",
+        "extracts"
+      ],
+      "properties": {
+        "status": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Parsed response status, including invalid codes retained as diagnostic evidence; null when unavailable."
+        },
+        "received_body_bytes": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/count"
+            }
+          ]
+        },
+        "sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[A-Za-z0-9+/]{43}=$"
+        },
+        "length_mismatch": {
+          "type": "boolean"
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "reset": {
+          "type": "boolean"
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "headers": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/header_map"
+            }
+          ]
+        },
+        "trailers": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/header_map"
+            }
+          ]
+        },
+        "body": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "tturl-common-v1.schema.json#/$defs/encoded_data"
+                },
+                {
+                  "properties": {
+                    "encoding": {
+                      "const": "base64"
+                    },
+                    "data": {
+                      "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "extracts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/extract"
+          }
+        },
+        "content_length": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        },
+        "body_bytes": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/count"
+            }
+          ]
+        },
+        "body_captured_bytes": {
+          "$ref": "#/$defs/count"
+        },
+        "body_captured_complete": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "complete": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "status": {
+                "type": "integer",
+                "minimum": 200,
+                "maximum": 599
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9+/]{43}=$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "body": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "body_captured_bytes": {
+                "const": 0
+              },
+              "body_captured_complete": {
+                "const": false
+              },
+              "extracts": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "outcome": {
+      "type": "object",
+      "required": [
+        "request_id",
+        "position",
+        "pool_id",
+        "worker_id",
+        "connection_id",
+        "protocol",
+        "attempted",
+        "early_response",
+        "timing",
+        "response",
+        "failure"
+      ],
+      "properties": {
+        "request_id": {
+          "$ref": "#/$defs/count"
+        },
+        "position": {
+          "$ref": "#/$defs/count"
+        },
+        "pool_id": {
+          "$ref": "#/$defs/count"
+        },
+        "worker_id": {
+          "$ref": "#/$defs/count"
+        },
+        "connection_id": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/positive_id"
+            }
+          ]
+        },
+        "protocol": {
+          "$ref": "#/$defs/protocol"
+        },
+        "attempted": {
+          "type": "boolean"
+        },
+        "early_response": {
+          "type": "boolean"
+        },
+        "timing": {
+          "$ref": "#/$defs/timing"
+        },
+        "response": {
+          "$ref": "#/$defs/response"
+        },
+        "failure": {
+          "$ref": "#/$defs/failure"
+        }
+      },
+      "additionalProperties": false
+    },
+    "connection": {
+      "type": "object",
+      "required": [
+        "connection_id",
+        "worker_id",
+        "pool_id",
+        "slot",
+        "replacement_of",
+        "protocol",
+        "negotiated_protocol",
+        "local_address",
+        "remote_address",
+        "state",
+        "reason",
+        "failure"
+      ],
+      "properties": {
+        "connection_id": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/positive_id"
+            }
+          ]
+        },
+        "worker_id": {
+          "$ref": "#/$defs/count"
+        },
+        "pool_id": {
+          "$ref": "#/$defs/count"
+        },
+        "slot": {
+          "$ref": "#/$defs/count"
+        },
+        "replacement_of": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/positive_id"
+            }
+          ]
+        },
+        "protocol": {
+          "$ref": "#/$defs/protocol"
+        },
+        "negotiated_protocol": {
+          "type": "string"
+        },
+        "local_address": {
+          "type": "string"
+        },
+        "remote_address": {
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "acquired",
+            "retired",
+            "failed",
+            "disposed"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "failure": {
+          "$ref": "#/$defs/failure"
+        }
+      },
+      "additionalProperties": false
+    },
+    "trial": {
+      "type": "object",
+      "required": [
+        "kind",
+        "trial_index",
+        "worker_id",
+        "started_at",
+        "initial_gate_ns",
+        "initial_gate_reason",
+        "final_gate_ns",
+        "final_gate_reason",
+        "order",
+        "committed",
+        "offered_operations",
+        "complete",
+        "failure",
+        "outcomes",
+        "connections"
+      ],
+      "properties": {
+        "kind": {
+          "const": "trial"
+        },
+        "trial_index": {
+          "$ref": "#/$defs/count"
+        },
+        "worker_id": {
+          "$ref": "#/$defs/count"
+        },
+        "started_at": {
+          "$ref": "#/$defs/started_at"
+        },
+        "initial_gate_ns": {
+          "$ref": "#/$defs/offset_ns"
+        },
+        "initial_gate_reason": {
+          "type": "string"
+        },
+        "final_gate_ns": {
+          "$ref": "#/$defs/offset_ns"
+        },
+        "final_gate_reason": {
+          "type": "string"
+        },
+        "order": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/count"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "committed": {
+          "type": "boolean"
+        },
+        "offered_operations": {
+          "$ref": "#/$defs/count"
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "failure": {
+          "$ref": "#/$defs/failure"
+        },
+        "outcomes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/outcome"
+          },
+          "minItems": 1
+        },
+        "connections": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/connection"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "initial_gate_ns": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "initial_gate_reason": {
+                "minLength": 1
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "initial_gate_reason": {
+                "const": ""
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "final_gate_ns": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "final_gate_reason": {
+                "minLength": 1
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "final_gate_reason": {
+                "const": ""
+              }
+            }
+          }
+        }
+      ]
+    },
+    "warmup": {
+      "type": "object",
+      "required": [
+        "kind",
+        "worker_id",
+        "started_at",
+        "initial_gate_ns",
+        "initial_gate_reason",
+        "final_gate_ns",
+        "final_gate_reason",
+        "order",
+        "committed",
+        "offered_operations",
+        "complete",
+        "failure",
+        "outcomes",
+        "connections",
+        "phase_index",
+        "trial_index",
+        "phase"
+      ],
+      "properties": {
+        "kind": {
+          "const": "warmup"
+        },
+        "worker_id": {
+          "$ref": "#/$defs/count"
+        },
+        "started_at": {
+          "$ref": "#/$defs/started_at"
+        },
+        "initial_gate_ns": {
+          "$ref": "#/$defs/offset_ns"
+        },
+        "initial_gate_reason": {
+          "type": "string"
+        },
+        "final_gate_ns": {
+          "$ref": "#/$defs/offset_ns"
+        },
+        "final_gate_reason": {
+          "type": "string"
+        },
+        "order": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/count"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "committed": {
+          "type": "boolean"
+        },
+        "offered_operations": {
+          "$ref": "#/$defs/count"
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "failure": {
+          "$ref": "#/$defs/failure"
+        },
+        "outcomes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/outcome"
+          },
+          "minItems": 1
+        },
+        "connections": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/connection"
+          }
+        },
+        "phase_index": {
+          "$ref": "#/$defs/count"
+        },
+        "trial_index": {
+          "$ref": "#/$defs/count"
+        },
+        "phase": {
+          "enum": [
+            "initial",
+            "replacement"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "initial_gate_ns": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "initial_gate_reason": {
+                "minLength": 1
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "initial_gate_reason": {
+                "const": ""
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "final_gate_ns": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "final_gate_reason": {
+                "minLength": 1
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "final_gate_reason": {
+                "const": ""
+              }
+            }
+          }
+        }
+      ]
+    },
+    "accounting": {
+      "type": "object",
+      "required": [
+        "trials_attempted",
+        "trials_complete",
+        "trials_incomplete",
+        "trials_unattempted",
+        "cycles_attempted",
+        "cycles_complete",
+        "cycles_incomplete",
+        "cycles_unattempted",
+        "request_operations_attempted",
+        "request_operations_complete",
+        "request_operations_failed",
+        "request_operations_unattempted",
+        "warmup_trials",
+        "warmup_trials_complete",
+        "warmup_trials_incomplete",
+        "warmup_operations_attempted",
+        "warmup_operations_complete",
+        "warmup_operations_failed",
+        "measured_commitments",
+        "warmup_commitments",
+        "measured_offered_operations",
+        "warmup_offered_operations",
+        "connections_acquired",
+        "connections_retired",
+        "connections_replaced",
+        "acquisition_failures",
+        "warmup_operations_unattempted",
+        "initial_warmup_trials",
+        "replacement_warmup_trials"
+      ],
+      "properties": {
+        "trials_attempted": {
+          "$ref": "#/$defs/count"
+        },
+        "trials_complete": {
+          "$ref": "#/$defs/count"
+        },
+        "trials_incomplete": {
+          "$ref": "#/$defs/count"
+        },
+        "trials_unattempted": {
+          "$ref": "#/$defs/count"
+        },
+        "cycles_attempted": {
+          "$ref": "#/$defs/count"
+        },
+        "cycles_complete": {
+          "$ref": "#/$defs/count"
+        },
+        "cycles_incomplete": {
+          "$ref": "#/$defs/count"
+        },
+        "cycles_unattempted": {
+          "$ref": "#/$defs/count"
+        },
+        "request_operations_attempted": {
+          "$ref": "#/$defs/count"
+        },
+        "request_operations_complete": {
+          "$ref": "#/$defs/count"
+        },
+        "request_operations_failed": {
+          "$ref": "#/$defs/count"
+        },
+        "request_operations_unattempted": {
+          "$ref": "#/$defs/count"
+        },
+        "warmup_operations_attempted": {
+          "$ref": "#/$defs/count"
+        },
+        "warmup_operations_complete": {
+          "$ref": "#/$defs/count"
+        },
+        "warmup_operations_failed": {
+          "$ref": "#/$defs/count"
+        },
+        "measured_commitments": {
+          "$ref": "#/$defs/count"
+        },
+        "warmup_commitments": {
+          "$ref": "#/$defs/count"
+        },
+        "measured_offered_operations": {
+          "$ref": "#/$defs/count"
+        },
+        "warmup_offered_operations": {
+          "$ref": "#/$defs/count"
+        },
+        "connections_acquired": {
+          "$ref": "#/$defs/count"
+        },
+        "connections_retired": {
+          "$ref": "#/$defs/count"
+        },
+        "connections_replaced": {
+          "$ref": "#/$defs/count"
+        },
+        "acquisition_failures": {
+          "$ref": "#/$defs/count"
+        },
+        "warmup_trials": {
+          "$ref": "#/$defs/count"
+        },
+        "warmup_trials_complete": {
+          "$ref": "#/$defs/count"
+        },
+        "warmup_trials_incomplete": {
+          "$ref": "#/$defs/count"
+        },
+        "warmup_operations_unattempted": {
+          "$ref": "#/$defs/count"
+        },
+        "initial_warmup_trials": {
+          "$ref": "#/$defs/count"
+        },
+        "replacement_warmup_trials": {
+          "$ref": "#/$defs/count"
+        }
+      },
+      "additionalProperties": false
+    },
+    "quality": {
+      "type": "object",
+      "required": [
+        "attempted",
+        "unattempted",
+        "early_responses",
+        "resets",
+        "incomplete_responses",
+        "statuses",
+        "failures"
+      ],
+      "properties": {
+        "attempted": {
+          "$ref": "#/$defs/count"
+        },
+        "unattempted": {
+          "$ref": "#/$defs/count"
+        },
+        "early_responses": {
+          "$ref": "#/$defs/count"
+        },
+        "resets": {
+          "$ref": "#/$defs/count"
+        },
+        "incomplete_responses": {
+          "$ref": "#/$defs/count"
+        },
+        "statuses": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^-?(?:0|[1-9][0-9]*)$"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/count"
+          }
+        },
+        "failures": {
+          "type": "object",
+          "propertyNames": {
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/count"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "description": "Attempted and unattempted operations reconcile terminal engine accounting, including unpublished operations. Status, failure and response-quality counts aggregate delivered observations."
+    },
+    "duration_summary": {
+      "type": "object",
+      "required": [
+        "count",
+        "min_ns",
+        "max_ns",
+        "p50_ns",
+        "p90_ns",
+        "p95_ns",
+        "p99_ns",
+        "mean_ns",
+        "standard_deviation_ns"
+      ],
+      "properties": {
+        "count": {
+          "$ref": "#/$defs/count"
+        },
+        "min_ns": {
+          "$ref": "#/$defs/offset_ns"
+        },
+        "max_ns": {
+          "$ref": "#/$defs/offset_ns"
+        },
+        "p50_ns": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "p90_ns": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "p95_ns": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "p99_ns": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "mean_ns": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "standard_deviation_ns": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "count": {
+                "const": 0
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "min_ns": {
+                "type": "null"
+              },
+              "max_ns": {
+                "type": "null"
+              },
+              "p50_ns": {
+                "type": "null"
+              },
+              "p90_ns": {
+                "type": "null"
+              },
+              "p95_ns": {
+                "type": "null"
+              },
+              "p99_ns": {
+                "type": "null"
+              },
+              "mean_ns": {
+                "type": "null"
+              },
+              "standard_deviation_ns": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "min_ns": {
+                "type": "integer"
+              },
+              "max_ns": {
+                "type": "integer"
+              },
+              "p50_ns": {
+                "type": "number"
+              },
+              "p90_ns": {
+                "type": "number"
+              },
+              "p95_ns": {
+                "type": "number"
+              },
+              "p99_ns": {
+                "type": "number"
+              },
+              "mean_ns": {
+                "type": "number"
+              },
+              "standard_deviation_ns": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "extraction_summary": {
+      "type": "object",
+      "required": [
+        "extractor_id",
+        "responses",
+        "complete_responses",
+        "matched_responses",
+        "matches",
+        "named_groups"
+      ],
+      "properties": {
+        "extractor_id": {
+          "$ref": "#/$defs/count"
+        },
+        "responses": {
+          "$ref": "#/$defs/count"
+        },
+        "complete_responses": {
+          "$ref": "#/$defs/count"
+        },
+        "matched_responses": {
+          "$ref": "#/$defs/count"
+        },
+        "matches": {
+          "$ref": "#/$defs/count"
+        },
+        "named_groups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "participations"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "participations": {
+                "$ref": "#/$defs/count"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "request_id",
+        "protocol",
+        "duration",
+        "quality",
+        "extraction"
+      ],
+      "properties": {
+        "request_id": {
+          "$ref": "#/$defs/count"
+        },
+        "protocol": {
+          "$ref": "#/$defs/protocol"
+        },
+        "duration": {
+          "$ref": "#/$defs/duration_summary"
+        },
+        "quality": {
+          "$ref": "#/$defs/quality"
+        },
+        "extraction": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/extraction_summary"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "result": {
+      "type": "object",
+      "required": [
+        "kind",
+        "completion",
+        "started_at",
+        "accounting",
+        "summaries",
+        "connections"
+      ],
+      "properties": {
+        "kind": {
+          "const": "result"
+        },
+        "completion": {
+          "$ref": "#/$defs/completion"
+        },
+        "started_at": {
+          "$ref": "#/$defs/started_at"
+        },
+        "accounting": {
+          "$ref": "#/$defs/accounting"
+        },
+        "summaries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/summary"
+          },
+          "minItems": 1
+        },
+        "connections": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/connection"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "extractor": {
+      "type": "object",
+      "required": [
+        "extractor_id",
+        "pattern",
+        "selection",
+        "fields"
+      ],
+      "properties": {
+        "extractor_id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pattern": {
+          "type": "string"
+        },
+        "selection": {
+          "enum": [
+            "whole_match",
+            "named_groups"
+          ]
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false,
+      "description": "Run-scoped dense extractor identity and resolved matching configuration."
+    },
+    "extract_capture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "participated",
+        "offset",
+        "encoding",
+        "data"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "participated": {
+          "type": "boolean"
+        },
+        "offset": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "tturl-common-v1.schema.json#/$defs/offset"
+            }
+          ]
+        },
+        "encoding": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "utf-8",
+            "base64",
+            null
+          ]
+        },
+        "data": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "participated": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "offset": {
+                "$ref": "tturl-common-v1.schema.json#/$defs/offset"
+              },
+              "encoding": {
+                "enum": [
+                  "utf-8",
+                  "base64"
+                ]
+              },
+              "data": {
+                "type": "string"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "offset": {
+                "const": null
+              },
+              "encoding": {
+                "const": null
+              },
+              "data": {
+                "const": null
+              }
+            }
+          }
+        }
+      ],
+      "description": "One named capture and its participation, half-open byte offset and explicitly encoded data."
+    },
+    "extract_whole_match": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "offset",
+        "encoding",
+        "data",
+        "captures"
+      ],
+      "properties": {
+        "offset": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/offset"
+        },
+        "encoding": {
+          "enum": [
+            "utf-8",
+            "base64"
+          ]
+        },
+        "data": {
+          "type": "string"
+        },
+        "captures": {
+          "type": "array",
+          "maxItems": 0
+        }
+      },
+      "description": "One whole match with half-open byte offsets and named captures."
+    },
+    "extract_named_match": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "offset",
+        "encoding",
+        "data",
+        "captures"
+      ],
+      "properties": {
+        "offset": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/offset"
+        },
+        "encoding": {
+          "const": null
+        },
+        "data": {
+          "const": null
+        },
+        "captures": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/extract_capture"
+          }
+        }
+      },
+      "description": "One selected named match with half-open byte offsets and named captures."
+    },
+    "extract": {
+      "type": "object",
+      "required": [
+        "extractor_id",
+        "complete",
+        "matches"
+      ],
+      "properties": {
+        "extractor_id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "matches": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/extract_whole_match"
+              },
+              {
+                "$ref": "#/$defs/extract_named_match"
+              }
+            ]
+          }
+        }
+      },
+      "additionalProperties": false,
+      "description": "Derived matches from the retained response prefix, joined through extractor_id; complete concerns search coverage of accepted bytes."
+    },
+    "tls_policy": {
+      "type": "object",
+      "required": [
+        "verify_peer",
+        "server_name",
+        "minimum_version",
+        "requested_minimum_version",
+        "maximum_version",
+        "key_log_enabled",
+        "dynamic_record_sizing",
+        "protocol_fallback"
+      ],
+      "properties": {
+        "verify_peer": {
+          "type": "boolean"
+        },
+        "server_name": {
+          "type": "string"
+        },
+        "minimum_version": {
+          "type": "integer",
+          "minimum": 771,
+          "maximum": 65535
+        },
+        "requested_minimum_version": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "maximum_version": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "key_log_enabled": {
+          "type": "boolean"
+        },
+        "dynamic_record_sizing": {
+          "const": false
+        },
+        "protocol_fallback": {
+          "const": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "completion": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "state",
+            "failure"
+          ],
+          "properties": {
+            "state": {
+              "const": "complete"
+            },
+            "failure": {
+              "type": "null"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "state",
+            "failure"
+          ],
+          "properties": {
+            "state": {
+              "const": "stopped"
+            },
+            "failure": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/failure_detail"
+                },
+                {
+                  "properties": {
+                    "code": {
+                      "const": "interrupted"
+                    },
+                    "phase": {
+                      "const": "run"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "state",
+            "failure"
+          ],
+          "properties": {
+            "state": {
+              "const": "failed"
+            },
+            "failure": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/failure_detail"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "failure_detail": {
+      "type": "object",
+      "required": [
+        "phase",
+        "code",
+        "message"
+      ],
+      "properties": {
+        "phase": {
+          "enum": [
+            "acquisition",
+            "readiness",
+            "execution",
+            "output",
+            "run"
+          ]
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "phase": {
+      "type": "object",
+      "required": [
+        "kind",
+        "phase",
+        "worker_id",
+        "phase_index",
+        "connections"
+      ],
+      "properties": {
+        "kind": {
+          "const": "phase"
+        },
+        "phase": {
+          "enum": [
+            "initial_acquisition",
+            "worker_warmup",
+            "initial_warmup"
+          ]
+        },
+        "worker_id": {
+          "type": "integer",
+          "minimum": -1
+        },
+        "phase_index": {
+          "$ref": "#/$defs/count"
+        },
+        "connections": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/connection"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "const": "worker_warmup"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "worker_id": {
+                "$ref": "#/$defs/count"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "worker_id": {
+                "const": -1
+              },
+              "phase_index": {
+                "const": 0
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

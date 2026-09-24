@@ -1,0 +1,158 @@
+'--vary' NAME[:ENC...]=SOURCE binds a literal token to a set of values. It turns
+one block into one request per value or combination. Put NAME wherever its
+value should appear; the token has no surrounding delimiters.
+
+## Sources
+
+- @file reads one value per line. It removes a trailing CR, skips empty lines,
+  and preserves every other byte, including leading or trailing whitespace.
+  The final line need not end with a newline. A source with no retained lines
+  is an error.
+- {a,b,c} supplies a literal comma-separated list. It has no escape syntax; use
+  @file for a value that cannot be represented unambiguously, such as one
+  containing a comma. Empty items are values, as in {a,,c}; {} is an error.
+- 1-100, 0x00-0xff, and a-z are ascending ranges. They start at the lower
+  endpoint and advance without exceeding the upper endpoint. Append :step for
+  a positive stride, as in 0-100:10. The upper endpoint appears only when the
+  stride lands on it.
+
+Numeric endpoints are non-negative, have no sign, and must fit a signed 64-bit
+integer. Decimal endpoints must both be decimal; hexadecimal endpoints must
+both have a 0x or 0X prefix, and A-F letters across them cannot mix case. A
+leading zero preserves the wider endpoint width. Generated hexadecimal values
+omit the prefix. Their A-F letters are uppercase if either endpoint contains
+uppercase A-F; otherwise they are lowercase. Alphabetic endpoints must be
+single ASCII letters of the same case.
+
+Source files treat notation such as $HEX[...] as ordinary text. @- reads
+newline-separated values from the invocation's standard-input snapshot; body
+references reuse the same raw bytes. Read tturl help bodies for snapshot,
+cancellation and memory materialisation rules.
+
+  printf 'a\nb\nc\n' | tturl detect --dry-run --direction late \
+    --vary 'GUESS=@-' https://example.test/GUESS
+
+## Where tokens apply
+
+tturl substitutes tokens into user-authored request text: URLs, methods, cookie
+names and values, explicit header names and values, authentication credentials,
+inline data and JSON, multipart field names and literal values, explicit
+multipart filename and type metadata, and referenced body bytes. Basic
+credentials are re-encoded after substitution.
+
+Tokens do not apply to '--name', generated headers, SOURCE expressions, source
+values, or referenced filesystem paths. A default multipart filename derived
+from its literal path stays unchanged. Explicit ';filename=' metadata varies.
+Every token must occur in an eligible original input of the resolved request.
+NAME must be non-empty and contain no whitespace. ':' and '=' delimit the
+binding grammar and cannot be part of NAME. Token names cannot overlap by
+prefix because substitution would be ambiguous.
+
+All bindings are substituted simultaneously. A substituted value, encoded or
+not, is not scanned again for another token.
+
+A value substituted into a URL fragment appears in the request label but is not
+sent in the HTTP request. Fragments are client-side URL data.
+
+## Referenced body contents
+
+'--vary-file-content' defaults to true. It substitutes tokens in bytes loaded
+for data, binary data, URL-encoded files, JSON documents and patches, and
+multipart uploads and file-backed fields. This includes body stdin. Binary
+bytes are eligible, including NUL and bytes outside UTF-8.
+
+Substitution happens before data-file newline processing, URL encoding, JSON
+validation and merging, or multipart serialisation. Generated framing is not
+template input. No implicit JSON escaping is added; choose encoders as needed.
+A JSON file template may become valid only after substitution.
+
+Each distinct referenced body path is loaded once for a resolved block's
+expansion. Occurrence checks and every variant share immutable raw snapshots;
+repeats and later trials reuse the prepared bytes. Stdin keeps its invocation
+snapshot. Source files supply literal values and are never templates.
+
+Use '--vary-file-content=false' to preserve every referenced body in a block
+while varying inline fields. A bare '--vary-file-content' or explicit '=true'
+enables it. The preamble supplies the inherited policy; an explicit block value
+overrides it for the complete resolved request, including inherited bodies and
+tokens. Siblings inherit independently. '--reset-body' discards inherited body
+inputs without resetting the policy or bindings. With no '--vary', the policy
+has no effect. A token found only in preserved file bytes remains an error.
+
+For example, if payload.txt contains message=GUESS, inspect two body variants:
+
+  tturl race --dry-run --verbose --data-binary @payload.txt \
+    --vary 'GUESS={a,b}' https://example.test/
+
+To preserve those bytes while varying the URL:
+
+  tturl race --dry-run --verbose --vary-file-content=false \
+    --data-binary @payload.txt --vary 'GUESS={a,b}' \
+    https://example.test/GUESS
+
+## Encoders
+
+Append encoders to NAME and chain them from left to right:
+
+  hex     lower-case hexadecimal
+  HEX     upper-case hexadecimal
+  b64     padded standard base64
+  b64url  unpadded URL-safe base64
+  url     RFC 3986 percent encoding
+
+Standard b64 can emit '+', '/', and '='. b64url uses the URL-safe alphabet
+without padding. Choose encoders for the receiving component; use b64:url when
+standard base64 must then be percent-encoded.
+
+## Combine bindings
+
+Repeat '--vary' to bind several tokens. The default '--vary-mode' clusterbomb
+takes the Cartesian product, with the last token changing fastest. pitchfork
+advances all sources together and stops at the shortest. If pitchfork sources
+have unequal lengths, the Requests section reports their truncation.
+
+'--repeat' N makes N copies of every resulting variant.
+
+A later binding for the same token replaces its source and encoders but keeps
+the token's first binding position. A new block token follows the inherited
+tokens, in block order. This position determines which token changes fastest
+in clusterbomb mode.
+
+## Expansion limits and target
+
+tturl expands every fan and builds its requests before opening a connection.
+A block using '--vary' must resolve to exactly one URL. tturl permits at most
+100,000 values in each variation source and 100,000 variants in each clusterbomb
+product. Neither limit caps '--repeat' or the total expansion across blocks.
+
+After substitution, final request URLs must normalise to one dial host and
+port. An explicit Host field may vary HTTP/2 :authority without changing that
+URL dial target or TLS server name. A fan may vary other request content or URL
+paths, but not the dial host or port.
+
+## Labels and reports
+
+Request labels contain the original, pre-encoder source values. Values with
+non-printable bytes or leading or trailing whitespace use tturl's $HEX[...]
+display form. A named fan prefixes each label with its '--name' value. Repeats
+and duplicate variants receive ~N suffixes.
+
+The compact Requests section collapses each fan to one row showing its request
+template, source, and expanded count, including '--repeat' copies. Results
+retain every concrete request identity; text may use a bounded reference and
+structured evidence uses request IDs. With '-v', the Requests section shows each
+constructed variant in detail.
+
+This command fans one block into two demo server requests:
+
+  tturl race -k --trials 1 --vary 'DELAY={100us,5000us}' \
+    'https://127.0.0.1:8443/sleep?duration=DELAY'
+
+The resulting labels are DELAY=100us and DELAY=5000us.
+
+## Next steps
+
+  tturl help requests   Review labels and workload after expansion
+  tturl help blocks     Control the scope and inheritance of a fan
+  tturl help headers    Vary headers, credentials, cookies, or methods
+  tturl help bodies     Build and inspect referenced body contents

@@ -1,0 +1,99 @@
+Choose between response arrival order and elapsed request duration. The
+arrival-order commands release each batch's headers in one TLS record.
+Bodyless and explicitly empty requests finish there; non-empty bodies finish
+together in a later record. Batches mixing those completion points have no
+single gate. tturl time measures durations independently.
+
+  Inspect each trial's responses and arrival order          race
+  Exercise a state-change race and inspect its outcomes     race
+  Describe ranks across repeated trials of a fixed batch    measure
+  Test a balanced batch for an arrival-order difference     analyse
+  Adaptively test for an early or late outlier              detect
+  Describe per-request durations over repeated trials       time
+
+## tturl race: what happened in each trial?
+
+tturl race shows every request outcome and any arrival rank. It records status
+and accepted body size, along with stream resets. Capture options add content
+and extracted values. The report preserves each trial without aggregating ranks
+or making a statistical finding.
+
+For timing work, tturl race can be a quick correctness check on a new batch. For
+a state-change race, the individual responses or resulting application state may
+be all the evidence you need.
+
+tturl race can also stream trial records as JSONL to another tool.
+
+## tturl measure: how did the fixed batch rank?
+
+tturl measure repeats one fixed batch and describes each request's arrival
+ranks. It shows distributions, means, pairwise precedence, status outcomes,
+position effects, and execution accounting. The report is descriptive and draws
+no statistical conclusion.
+
+Use tturl measure to examine the shape and stability of the ordering while every
+request receives the same trials. Its default rotation balances requests
+across outbound positions.
+
+## tturl analyse: does request identity affect the order?
+
+tturl analyse collects balanced rotation cycles for one fixed set of two through
+eight requests. After collection, it applies an overall statistical test to the
+recorded ranks. Only when that test finds a difference does it apply pairwise
+tests to the same evidence. Pairwise testing sends no additional requests.
+
+Use tturl analyse for a fixed inferential test rather than a descriptive
+ranking. The method has a fixed threshold, arrangement, and workload bounds.
+
+## tturl detect: is one candidate an outlier?
+
+tturl detect is beta. Its interface and behaviour may change.
+
+It adaptively tests a set of candidate requests for one early or late
+arrival-order outlier. It stops after finding one, ruling out the configured
+minimum effect, or spending the comparison budget. Its adaptive allocation can
+compare some candidates more often than others.
+
+Use tturl detect when a single-outlier model fits the question and searching a
+larger candidate set matters more than measuring every request equally. You must
+choose an early, late, or either direction with '--direction'. Require a
+defensible common peer population; systematic peer differences or multiple
+extremes call for a different design.
+
+## tturl time: how long did each request take?
+
+tturl time is beta. Its interface and behaviour may change.
+
+tturl time describes per-request duration distributions over repeated trials. It
+supports HTTP/1.1 and HTTP/2, mixed protocol pools and distinct destinations,
+with one active request per connection. Its summary includes retained duration
+counts, quantiles, status outcomes and incomplete work. Read tturl help time for
+its delivery, population and output contracts.
+
+## Choosing a path
+
+One useful path for an unfamiliar timing batch is to inspect a few trials with
+tturl race. Use tturl measure to summarise its ranking. Continue with tturl
+analyse or tturl detect when the question calls for inference.
+
+For a state-change race, tturl race is the experiment rather than a preliminary
+step. Control the starting state, then inspect response status, content,
+extracted values, or resulting application state. Arrival rank may not matter.
+
+Choose tturl time when elapsed duration is the evidence you need. Its sequential
+default measures requests separately. Optional synchronisation aligns release
+across separate connections while keeping independent timers.
+
+Use each summary within its experimental design. tturl detect allocates
+comparisons adaptively, so its candidate means do not describe the same fixed
+batch as tturl measure.
+
+## Next steps
+
+  tturl help race       Examine trial-level and state-change evidence
+  tturl help measure    Read descriptive fixed-batch rank summaries
+  tturl help analyse    Test a fixed request set in balanced cycles
+  tturl help detect     Test under the directional single-outlier model
+  tturl help time       Measure independent request-duration distributions
+  tturl help requests   Build and label the batch you want to compare
+  tturl help design     Turn your chosen command into a controlled experiment

@@ -1,0 +1,6 @@
+#!/bin/sh
+# Opt-in pre-commit hook. Enable it (per clone) with:
+#   git config core.hooksPath scripts/hooks
+# It runs the fast source gate over the whole module. The completion gate adds
+# the live vulnerability scan. Bypass a single commit with `git commit -n`.
+exec make check-code

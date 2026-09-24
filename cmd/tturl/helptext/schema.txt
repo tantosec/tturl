@@ -1,0 +1,45 @@
+Export the exact JSON Schema documents shipped with this binary, offline and
+without a source checkout. tturl schema exports documents; it does not
+validate reports.
+
+## Save the command and shared documents
+
+Choose one literal lowercase subject: race, measure, analyse, detect, time
+or common.
+A command subject selects this binary's current emitted record schema. The
+common subject selects the shared definitions resource used by all five.
+
+  tturl schema race --output race.schema.json
+  tturl schema common -o common.schema.json
+
+Omit '--output' or use '-' to write one plain JSON document to stdout. Output
+options, '-s' and '--silent' may precede or follow the subject. The last
+output selection wins. Successful export is silent on stderr. Files are
+created or truncated after argument validation. Writes are not atomic and
+failures may leave empty or partial JSON. See tturl schema --help for the
+complete grammar.
+
+## Configure offline resolution
+
+A consumer needs the selected command document and the common document. Those
+are the only project-schema dependencies of the current command schemas.
+Common is a definitions resource, not a report schema on its own.
+
+Register both documents with a JSON Schema Draft 2020-12 resolver under their
+original '$id' values. Relative '$ref' values resolve against those identifiers,
+not necessarily the saved filenames. Saving the files beside each other alone
+does not guarantee offline resolution; configure the consumer's resolver.
+
+The report's logical schema value selects an exact contract. It is distinct
+from the schema document's '$id' URI. Export neither requires nor promises
+network retrieval of that URI. A matching binary exports its own contracts;
+there is no historical-version selector or online newest-version selection.
+
+## Validate records and check the stream
+
+Each command schema validates individual JSONL records. Whole-stream order,
+catalogue joins and accounting require the normative structured-output contract:
+
+  https://github.com/tantosec/tturl/blob/main/cmd/tturl/doc/structured-output-contract.md
+
+Read tturl help json for report framing and consumer workflows.

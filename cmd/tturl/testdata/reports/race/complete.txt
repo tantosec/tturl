@@ -1,0 +1,36 @@
+================================================================================
+                                   tturl race
+================================================================================
+
+----------------------------------- Requests -----------------------------------
+
+Target: https://example.test
+
+  early   GET  /request/0
+  late    GET  /request/1
+
+Total: 2 requests.
+
+---------------------------------- Experiment ----------------------------------
+
+Trials: 1 x 2 requests = 2 request operations.
+Arrangement: none.
+Pacing: batch-rate ceiling unlimited; request-rate ceiling unlimited; minimum
+        batch-start interval unconstrained.
+Connections: up to 1 active (default).
+Streams: honour the peer's advertised concurrent-stream limit.
+Response limits: 8MiB accepted body per stream; 30s transport time per batch.
+Run timeout: unlimited for live request execution.
+
+----------------------------------- Results ------------------------------------
+
+  rank  pos  request  response
+     0    0  early    204  0 B
+     1    1  late     204  0 B
+Status: 204 x 2
+
+---------------------------------- Execution -----------------------------------
+
+Trials: 1/1 attempted; 1 rank-complete; 0 incomplete; 0 unattempted.
+Connections: 1 planned; 1 observed; 0 replacements.
+Request operations: 2 attempted; 2 rank-complete; 2 retained.

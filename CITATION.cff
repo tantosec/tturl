@@ -1,0 +1,54 @@
+cff-version: 1.2.0
+version: 0.0.8
+message: >-
+  If you use this software, please cite both the software and the original
+  Timeless Timing Attacks paper.
+title: >-
+  tturl: Timeless timing and request races over HTTP/2
+type: software
+license: MIT
+authors:
+  - family-names: Steven
+    given-names: Justin
+    affiliation: Tanto Security
+contact:
+  - name: Tanto Security
+    email: research@tantosec.com
+    website: https://tantosec.com
+abstract: >-
+  tturl is an HTTP/2 CLI for finding tiny timing differences and winning
+  request races through batch release and relative response arrival order. The
+  repository also provides the reusable tth2 batch-release engine,
+  domain-free statistical primitives in stats, and the internal ranking
+  subsystem behind tturl detect.
+repository-code: https://github.com/tantosec/tturl
+keywords:
+  - timing attacks
+  - side channels
+  - HTTP/2
+  - request races
+  - Go
+references:
+  - type: conference-paper
+    authors:
+      - family-names: Van Goethem
+        given-names: Tom
+      - family-names: Pöpper
+        given-names: Christina
+      - family-names: Joosen
+        given-names: Wouter
+      - family-names: Vanhoef
+        given-names: Mathy
+    title: >-
+      Timeless Timing Attacks: Exploiting Concurrency to Leak Secrets over
+      Remote Connections
+    collection-title: 29th USENIX Security Symposium (USENIX Security 20)
+    year: 2020
+    month: 8
+    start: 1985
+    end: 2002
+    publisher:
+      name: USENIX Association
+    url: >-
+      https://www.usenix.org/conference/usenixsecurity20/presentation/van-goethem
+    scope: Introduces the timeless timing attack technique implemented here.

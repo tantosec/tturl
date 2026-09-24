@@ -1,0 +1,146 @@
+This tour uses tturl to release HTTP/2 request batches against its built-in demo
+server. Each request asks the server to sleep for a specified amount of time
+before returning. We will see how a small timing difference affects response
+arrival order.
+
+This tour requires Linux or macOS. tturl demo-server and tturl time are
+unsupported on Windows. The arrival-order commands support Windows.
+
+## 1. Start the demo server
+
+Start the server:
+
+  tturl demo-server
+
+On startup, it generates an ephemeral self-signed TLS certificate and listens at
+https://127.0.0.1:8443. Keep it running for the rest of this tour.
+
+## 2. Explore the sleep route
+
+The demo server's /sleep route accepts a duration and spin-waits for that long.
+The CPU-heavy wait provides precision over short durations. To limit each
+request's CPU use, the server rejects durations over one second by default.
+
+Use curl, which sends one request here, to measure the total time it takes to
+request a sleep of 500 milliseconds:
+
+  curl -k \
+    -w 'Total: %{time_total}s\n' \
+    'https://127.0.0.1:8443/sleep?duration=500ms'
+
+'-k' disables TLS certificate verification. '-w' prints the selected transfer
+information after the response. tturl shares some of curl's request syntax, so
+several flags will be familiar.
+
+  Note: tturl does not support the '-w' flag.
+
+This command should report a total time of just over half a second.
+
+Try changing the sleep time from 500ms (0.5s) to 500us (0.0005s). Run it a few
+times. The time that is reported will almost certainly exceed 0.0005s because
+sending requests and receiving responses has overhead, even on the same machine.
+
+## 3. Welcome to tturl
+
+Use tturl race to compare a fast request with a slow one:
+
+  tturl race -k \
+    --block 'https://127.0.0.1:8443/sleep?duration=100us' --name fast \
+    --block 'https://127.0.0.1:8443/sleep?duration=5000us' --name slow
+
+tturl uses blocks to define request sets. Each '--block' begins a block, and its
+flags apply to every concrete request that block produces. Here, each block
+produces one request and '--name' gives it a stable identity in the report.
+
+The Results section should resemble:
+
+    rank  pos  request  response
+       0    0  fast     204  0 B
+       1    1  slow     204  0 B
+  Status: 204 x 2
+
+Each response is listed with a rank and a pos, which is short for 'position'.
+
+Even requests released in one batch have an outbound order under the hood. The
+requests are sent as separate streams on a multiplexed HTTP/2 connection, which
+at the end of the day boils down to a simple byte stream. tturl packs the
+finalising bytes of each request into one TLS application-data record to
+encourage near-simultaneous arrival and possible concurrent handling. Still,
+one request has to be finalised first within the record. tturl assigns position
+0 to the first outbound request, 1 to the second, and so on.
+
+For this route, the server does not send its final response headers until after
+the requested work. The response for whichever request finishes that work first
+should therefore enter the shared HTTP/2 connection first. Those final response
+headers cannot overtake one another on that ordered connection, so tturl can use
+their arrival order: the request whose final response headers it reads first
+gets rank 0, the next gets rank 1, and so on.
+
+Position refers to outbound order. Rank refers to inbound order.
+
+The fast response should arrive before the slow response, meaning it should have
+a rank of 0. Scheduling noise can still reverse the order in a trial. If that
+happens, repeat the command.
+
+Sending the same batch over and over with tturl race gets boring after a while.
+tturl race is great for exploiting race condition vulnerabilities, and its JSON
+output can be distinctly handy for doing your own analysis.
+
+If you want tturl to run and summarise a controlled experiment without the
+post-processing fuss, its other timing commands have you covered.
+
+## 4. Computer, do it again
+
+Use tturl measure to send the same batch 20 times:
+
+  tturl measure -k --trials 20 \
+    --block 'https://127.0.0.1:8443/sleep?duration=100us' --name fast \
+    --block 'https://127.0.0.1:8443/sleep?duration=5000us' --name slow
+
+tturl measure uses balanced rotation by default. Each cycle begins with a
+shuffle, then rotates that order until every request has occupied every outbound
+position once. This plans ten two-trial cycles: 20 trials and 40
+measured request operations.
+
+## 5. Read the measurement
+
+On a quiet machine, the central result should look something like this:
+
+  Rank counts (columns are ranks 0..1; 20 retained trials):
+    fast     [ 20   0 ]
+    slow     [  0  20 ]
+
+  Pairwise precedence (row-before-column fraction):
+    request  fast  slow
+    fast        -  1.00
+    slow     0.00     -
+
+In this example, fast arrived first in all 20 retained trials. Fast's mean rank
+is therefore 0, and slow's is 1.
+
+Read the pairwise table from row to column. The 1.00 in the fast row and slow
+column means that fast preceded slow in every retained trial.
+
+The exact result can vary with machine load. tturl measure does not estimate the
+elapsed gap, establish why the order occurred, or make a statistical finding.
+
+## 6. Change it up
+
+Replace 5000us with 150us and repeat the measurement. The smaller difference is
+harder to distinguish and more sensitive to CPU contention.
+
+What is the smallest timing difference you can see on your machine? More
+'--trials' may make the pattern easier to inspect. '--warmup' sends unmeasured
+trials before measured work begins on each connection, making cold starts less
+likely to distort the measurement.
+
+tturl measure is excellent for exploring a pattern, but a convincing-looking
+distribution is not, by itself, a finding. tturl analyse tests whether the
+observed order supports a request-identity effect.
+
+## Next steps
+
+  tturl help concepts   Understand why this experiment reveals relative order
+  tturl help commands   Choose a command for the question you want to ask
+  tturl help requests   Learn where the curl-like request subset ends
+  tturl help design     Control variables before moving to a real target

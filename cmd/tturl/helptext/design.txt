@@ -1,0 +1,167 @@
+A timeless timing experiment is a comparison, not merely a large collection of
+requests. Decide what should differ, what should stay alike, and what evidence
+would change your conclusion before spending a substantial request budget.
+
+Use only targets you are authorised to test. Begin with requests that are safe
+to repeat. tturl race, tturl measure, and tturl analyse send a complete measured
+batch in every trial. tturl detect builds adaptive comparison batches.
+Variation, repetition, warmups, and replacement connections can multiply the
+target workload.
+
+## Check the design before acquisition
+
+Define the experiment:
+
+  - the question and the response outcome or arrival-order pattern of interest
+  - the one deliberate difference between requests
+  - whether the work is descriptive or inferential
+  - a target-exposure budget, including expansion, warmups, and when to stop
+    after failures or connection replacements
+  - shared state and the HTTP statuses or other response evidence expected
+  - how requests will be assigned to outbound positions
+  - what result would change the conclusion
+
+Before scaling up, use a small bounded tturl race run with '--verbose' to check
+the concrete requests. Inspect its Requests and Experiment sections, then
+calculate the planned workload.
+
+Let W be the resolved measured width. In a tturl race or tturl measure run, T
+planned trials account for T * W measured request operations. In a tturl analyse
+run, C planned cycles account for C * W * W measured request operations.
+
+For tturl detect, a finite '--comparisons-max' N permits at most N times the
+effective comparison width in request participations. The default is 50,000
+comparisons at width two. tturl race with '--trials' unlimited and tturl detect
+with '--comparisons-max' unlimited impose no work-count limit.
+
+For arrival-order commands, the initial priming plan multiplies the warmup
+count, planned connections, and resolved warmup width. Each replacement starts
+the same sequence. tturl detect reports a maximum that includes its one
+permitted replacement per worker. A failure may stop a sequence early.
+tturl time plans warmup per worker; see tturl help time.
+
+Positional padding is resolved against W and changes fields at outbound
+positions without changing the request-operation count. It is a heuristic
+experiment condition, not proof that position bias is removed. If exploratory
+evidence selected a padding or priming design, start a fresh inferential run.
+For tturl detect, W is the effective comparison width and the resolved schedule
+remains fixed as candidate membership changes.
+
+These planned counts are not a hard cap on wire attempts for fixed-work
+commands. tturl detect does not retry an evidence-bearing comparison. Read the
+selected command guide for its exact budget and stopping contract.
+
+## Isolate the question
+
+Make the requests differ only in the property under study. Keep their origin,
+method, authentication context, headers, body shape, and response path alike
+unless one of those is the deliberate variable. Start with two named blocks so
+the comparison stays obvious in the command and report.
+
+For example:
+
+  tturl race -k --trials 3 \
+    --block 'https://127.0.0.1:8443/sleep?duration=100us' --name fast \
+    --block 'https://127.0.0.1:8443/sleep?duration=5000us' --name slow
+
+Use tturl race for a few trials and inspect every response before relying on
+arrival order. Check that statuses, sizes, resets, and extracted values match
+the operation you meant to compare. An early error response does not show that
+the intended operation was early.
+
+## Explore, then confirm
+
+Use tturl race or tturl measure to refine the question, requests, controls, and
+settings. Once the design is fixed, start a fresh run to evaluate it. Do not use
+exploratory evidence both to choose the design and support the final conclusion.
+
+Repeat important results under the same conditions before drawing broader
+conclusions from them.
+
+## Use controls and sensitivity checks
+
+A known-difference control can show whether the setup responds to a deliberate
+difference. An equal-work control can reveal a clean-looking arrival pattern
+when no difference was intended. Neither proves that every confound is absent.
+
+Repeat important work under a controlled sensitivity condition, such as fewer
+connections, a lower offered rate, or a separate target session. Fix those
+conditions before inspecting confirmatory evidence, and preserve every attempt,
+including failures and negative results. Report every attempted condition.
+Treat a condition chosen afterwards as exploratory and confirm it in another
+fresh run.
+
+## Separate request identity from position
+
+Position is where a request is written in a batch. A server or intermediary may
+favour one position regardless of request content. The resulting position
+effect can look request-dependent.
+
+At the start of each cycle, rotation shuffles a base order, then places every
+request at every position once.
+
+tturl race uses authored order by default for one trial and independent random
+permutations for multiple trials. '--arrange' overrides these defaults. tturl
+measure defaults to rotation but also supports random or authored order. Random
+arrangement balances only in expectation, but tturl measure can retain
+individual rank-complete trials when other trials fail. Authored order cannot
+separate request identity from position.
+
+tturl analyse requires rotation. tturl detect uniformly randomises positions
+within each adaptive comparison and has no '--arrange' option.
+
+Before choosing detect, require a defensible common reference population, set
+the searched direction in advance, and expect at most one outlier. Use a fixed
+measure or analyse design when peers differ systematically or the field may
+contain multiple same-direction or opposing extremes. tturl detect cannot
+verify that premise from the adaptive evidence used for its decision.
+
+Use the pos column in the tturl race report, and read the Position check in
+tturl measure and tturl analyse reports.
+
+Exact balance prevents systematic request-position imbalance in retained
+cycles. It does not prove position harmless or rule out request-by-position
+interactions, connection state, or target load.
+
+## Control shared state and load
+
+HTTP/2 streams can progress concurrently while the application serialises work
+on a session, account, lock, cache entry, or rate-limit bucket. That shared
+state may be the subject of the experiment or an accidental difference that
+overwhelms it. Distinct credentials or resources do not prove independent work.
+
+Warmups can reduce cold-connection effects. Arrival-order commands warm each
+connection separately; tturl time warms whole workers. Parallel and
+replacement connections may see different application state. Treat these
+choices as part of the experimental conditions.
+
+More connections or a faster batch rate can shorten a run while changing target
+behaviour. Establish a low-load result first, then repeat important experiments
+with less parallelism or a lower offered rate. A result that moves with load
+describes that load regime. It is not noise to tune away.
+
+'--batch-rate-max' and '--request-rate-max' impose offered-rate ceilings, not
+minimum rates or timeouts. Read tturl help delivery before fitting connections
+or changing body release.
+
+## Build and preserve evidence in stages
+
+  1. Use tturl race for a few trials and inspect every response.
+  2. Use tturl measure on a fixed batch with balanced positions, then inspect
+     its rank distributions.
+  3. Add controls and repeat under a planned sensitivity condition.
+  4. Start a fresh tturl analyse run for a fixed test, or tturl detect for a
+     matching directional outlier search.
+  5. Preserve the command, report, target conditions, failures, and any
+     deviations from the plan.
+
+A stable arrival order establishes neither elapsed-time distance nor cause. A
+positive statistical finding does not by itself establish a vulnerability, and
+a negative result does not prove that the requests are equivalent. Bound the
+conclusion to the requests, target, delivery settings, and retained evidence.
+
+## Next steps
+
+  tturl help requests   Keep the deliberate difference visible in the batch
+  tturl help delivery   Apply the load, connection, and release controls
+  tturl help output     Preserve the evidence needed to support the conclusion

@@ -1,0 +1,39 @@
+================================================================================
+                                   tturl race
+================================================================================
+
+----------------------------------- Requests -----------------------------------
+
+Target: https://example.test
+
+  control    GET  /request/0
+  candidate  GET  /request/1
+
+Total: 2 requests.
+
+---------------------------------- Experiment ----------------------------------
+
+Trials: 1 x 2 requests = 2 request operations.
+Arrangement: none.
+Pacing: batch-rate ceiling unlimited; request-rate ceiling unlimited; minimum
+        batch-start interval unconstrained.
+Connections: up to 1 active (default).
+Streams: honour the peer's advertised concurrent-stream limit.
+Response limits: 8MiB accepted body per stream; 30s transport time per batch.
+Run timeout: unlimited for live request execution.
+
+----------------------------------- Results ------------------------------------
+
+  rank  pos  request    response
+     -    0  control    no response
+     -    1  candidate  no response
+Status: no responses
+  Error: connection reset during response collection
+
+---------------------------------- Execution -----------------------------------
+
+Trials: 1/1 attempted; 0 rank-complete; 1 incomplete; 0 unattempted.
+Connections: 1 planned; 1 observed; 0 replacements.
+Request operations: 2 attempted; 0 rank-complete; 0 retained.
+Completion: failed.
+Error: connection reset during response collection

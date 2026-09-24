@@ -1,0 +1,45 @@
+{
+  "nodes": {
+    "go-overlay": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1787475885,
+        "narHash": "sha256-UKZZDy/k5MwoN37IjTrOfhZDX/yDkVXDiTmPQVP1ry4=",
+        "owner": "purpleclay",
+        "repo": "go-overlay",
+        "rev": "1a2c6b8cded3c2593fda1cec930f4c695d55cfe4",
+        "type": "github"
+      },
+      "original": {
+        "owner": "purpleclay",
+        "ref": "v1.4.0",
+        "repo": "go-overlay",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1783224372,
+        "narHash": "sha256-8i/87eeoqiGE4yOTjwSA3Eh/ziJRQEmd/unYU+K27sk=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "d407951447dcd00442e97087bf374aad70c04cea",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "go-overlay": "go-overlay",
+        "nixpkgs": "nixpkgs"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

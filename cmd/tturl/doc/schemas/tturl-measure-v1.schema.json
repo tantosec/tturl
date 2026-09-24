@@ -1,0 +1,680 @@
+{
+  "title": "tturl measure JSON Lines record",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/run"
+    },
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/result"
+    }
+  ],
+  "$defs": {
+    "request": {
+      "allOf": [
+        {
+          "$ref": "tturl-common-v1.schema.json#/$defs/request"
+        },
+        {
+          "type": "object",
+          "required": [
+            "role"
+          ],
+          "properties": {
+            "role": {
+              "enum": [
+                "measured",
+                "warmup"
+              ]
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "acquisition": {
+      "allOf": [
+        {
+          "$ref": "tturl-common-v1.schema.json#/$defs/acquisition"
+        },
+        {
+          "type": "object",
+          "required": [],
+          "properties": {}
+        }
+      ],
+      "unevaluatedProperties": false,
+      "description": "Resolved live transport, execution and receive controls, independent of assignment and inference."
+    },
+    "run": {
+      "allOf": [
+        {
+          "$ref": "tturl-common-v1.schema.json#/$defs/run_envelope"
+        },
+        {
+          "type": "object",
+          "required": [
+            "schema",
+            "command",
+            "argv",
+            "plan",
+            "acquisition"
+          ],
+          "properties": {
+            "schema": {
+              "const": "tturl.measure/v1"
+            },
+            "command": {
+              "const": "measure"
+            },
+            "argv": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "prefixItems": [
+                {
+                  "const": "measure"
+                }
+              ]
+            },
+            "plan": {
+              "$ref": "#/$defs/plan"
+            },
+            "acquisition": {
+              "$ref": "#/$defs/acquisition"
+            }
+          }
+        },
+        {
+          "properties": {
+            "acquisition": {
+              "properties": {
+                "delivery": {
+                  "properties": {
+                    "selection": {
+                      "not": {
+                        "properties": {
+                          "state": {
+                            "const": "skipped_single_trial"
+                          }
+                        },
+                        "required": [
+                          "state"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "plan": {
+      "type": "object",
+      "required": [
+        "work",
+        "batch_width",
+        "warmup",
+        "arrangement",
+        "padding",
+        "position_balance"
+      ],
+      "properties": {
+        "work": {
+          "type": "object",
+          "required": [
+            "unit",
+            "requested",
+            "planned_trials"
+          ],
+          "properties": {
+            "unit": {
+              "enum": [
+                "trials",
+                "cycles"
+              ]
+            },
+            "requested": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "planned_trials": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "planned_cycles": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "batch_width": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "warmup": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/warmup"
+        },
+        "arrangement": {
+          "enum": [
+            "none",
+            "random",
+            "rotate"
+          ]
+        },
+        "padding": {
+          "type": "array",
+          "items": {
+            "$ref": "tturl-common-v1.schema.json#/$defs/padding"
+          }
+        },
+        "position_balance": {
+          "enum": [
+            "exact_per_complete_cycle",
+            "in_expectation",
+            "none"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "description": "Requested work and resolved experimental assignment; execution records what was attempted."
+    },
+    "request_stats": {
+      "type": "object",
+      "required": [
+        "request_id",
+        "samples",
+        "mean_rank",
+        "normalised_mean_rank",
+        "status_counts",
+        "status_varied",
+        "non_2xx_observed",
+        "rank_counts",
+        "reset_count"
+      ],
+      "properties": {
+        "request_id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "samples": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Retained measured trials containing this request; every measured request has one sample per retained trial."
+        },
+        "mean_rank": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Mean zero-based arrival rank over this object's samples; null when no observations exist."
+        },
+        "normalised_mean_rank": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Mean rank divided by effective batch width minus one, zero at width one; null exactly when mean_rank is null."
+        },
+        "status_counts": {
+          "type": "array",
+          "items": {
+            "$ref": "tturl-common-v1.schema.json#/$defs/status_count"
+          },
+          "description": "Sparse positive observed status counts, unique and increasing by status."
+        },
+        "status_varied": {
+          "type": "boolean"
+        },
+        "non_2xx_observed": {
+          "type": "boolean"
+        },
+        "rank_counts": {
+          "type": "array",
+          "items": {
+            "$ref": "tturl-common-v1.schema.json#/$defs/rank_count"
+          },
+          "description": "Sparse positive retained rank counts, unique and increasing by rank; sum equals samples."
+        },
+        "reset_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "description": "Derived request evidence joined through the global catalogue; requests increase by request ID."
+    },
+    "position_stats": {
+      "type": "object",
+      "required": [
+        "position",
+        "samples",
+        "mean_rank",
+        "rank_counts"
+      ],
+      "properties": {
+        "position": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "samples": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Retained measured trials observed at this outbound position, pooled across request identities."
+        },
+        "mean_rank": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Mean zero-based arrival rank over this object's samples; null when no observations exist."
+        },
+        "rank_counts": {
+          "type": "array",
+          "items": {
+            "$ref": "tturl-common-v1.schema.json#/$defs/rank_count"
+          },
+          "description": "Sparse positive retained rank counts, unique and increasing by rank; sum equals samples."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Derived retained rank observations at one outbound position, independent of request identity."
+    },
+    "pairwise_precedence": {
+      "type": "object",
+      "required": [
+        "before_request_ids",
+        "after_request_ids",
+        "counts"
+      ],
+      "properties": {
+        "before_request_ids": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "uniqueItems": true
+        },
+        "after_request_ids": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "uniqueItems": true
+        },
+        "counts": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      },
+      "additionalProperties": false,
+      "description": "Dense counts: rows identify before_request_ids, columns identify after_request_ids. Axes are increasing global IDs; dimensions match the axes."
+    },
+    "assignments": {
+      "type": "object",
+      "required": [
+        "request_ids",
+        "positions",
+        "counts"
+      ],
+      "properties": {
+        "request_ids": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "uniqueItems": true
+        },
+        "positions": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "uniqueItems": true
+        },
+        "counts": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      },
+      "additionalProperties": false,
+      "description": "Dense assignment counts: rows identify request_ids, columns identify positions. Axes are increasing; dimensions match the axes."
+    },
+    "position_spread": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "min_mean_rank",
+        "max_mean_rank",
+        "raw",
+        "normalised"
+      ],
+      "properties": {
+        "min_mean_rank": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/nullable_number"
+        },
+        "max_mean_rank": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/nullable_number"
+        },
+        "raw": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/nullable_number"
+        },
+        "normalised": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/nullable_number"
+        }
+      },
+      "description": "Derived spread of retained position means; normalised spread divides by batch width minus one, or is zero at width one."
+    },
+    "measurement": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "state",
+            "requests",
+            "positions",
+            "pairwise_precedence",
+            "assignments",
+            "position_balance",
+            "position_spread"
+          ],
+          "properties": {
+            "state": {
+              "const": "available"
+            },
+            "requests": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/request_stats"
+              }
+            },
+            "positions": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/position_stats"
+              }
+            },
+            "pairwise_precedence": {
+              "$ref": "#/$defs/pairwise_precedence"
+            },
+            "assignments": {
+              "$ref": "#/$defs/assignments"
+            },
+            "position_balance": {
+              "enum": [
+                "exact",
+                "in_expectation",
+                "none",
+                "unobserved"
+              ]
+            },
+            "position_spread": {
+              "$ref": "#/$defs/position_spread"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "state",
+            "requests",
+            "positions",
+            "pairwise_precedence",
+            "assignments",
+            "position_balance",
+            "position_spread",
+            "reason"
+          ],
+          "properties": {
+            "state": {
+              "const": "unavailable"
+            },
+            "requests": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/request_stats"
+              }
+            },
+            "positions": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/position_stats"
+              }
+            },
+            "pairwise_precedence": {
+              "$ref": "#/$defs/pairwise_precedence"
+            },
+            "assignments": {
+              "$ref": "#/$defs/assignments"
+            },
+            "position_balance": {
+              "enum": [
+                "exact",
+                "in_expectation",
+                "none",
+                "unobserved"
+              ]
+            },
+            "position_spread": {
+              "$ref": "#/$defs/position_spread"
+            },
+            "reason": {
+              "const": "no_retained_trials"
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "description": "Availability of descriptive retained rank evidence, independent of acquisition completion."
+    },
+    "acquisition_failure": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "phase",
+            "trial_index",
+            "connection_id",
+            "failure"
+          ],
+          "properties": {
+            "phase": {
+              "const": "measured"
+            },
+            "trial_index": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "connection_id": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "failure": {
+              "$ref": "tturl-common-v1.schema.json#/$defs/failure"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "phase",
+            "connection_id",
+            "failure"
+          ],
+          "properties": {
+            "phase": {
+              "const": "warmup"
+            },
+            "connection_id": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "failure": {
+              "$ref": "tturl-common-v1.schema.json#/$defs/failure"
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "description": "Observed acquisition attempt failure; diagnostic population is separate from retained rank evidence."
+    },
+    "execution_trials": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "planned",
+        "attempted",
+        "rank_complete",
+        "incomplete",
+        "unattempted",
+        "retained",
+        "excluded"
+      ],
+      "properties": {
+        "planned": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "attempted": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/non_negative_integer"
+        },
+        "rank_complete": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/non_negative_integer"
+        },
+        "incomplete": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/non_negative_integer"
+        },
+        "unattempted": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/non_negative_integer"
+        },
+        "retained": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/non_negative_integer"
+        },
+        "excluded": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/non_negative_integer"
+        }
+      },
+      "description": "Measured trial attempts. Attempted equals rank_complete plus incomplete; bounded work equals attempted plus unattempted. Retained evidence excludes method-ineligible rank-complete trials where applicable."
+    },
+    "execution_cycles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "planned",
+        "attempted",
+        "retained",
+        "incomplete",
+        "unattempted"
+      ],
+      "properties": {
+        "planned": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "attempted": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/non_negative_integer"
+        },
+        "retained": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/non_negative_integer"
+        },
+        "incomplete": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/non_negative_integer"
+        },
+        "unattempted": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/non_negative_integer"
+        }
+      },
+      "description": "Whole rotations: planned work is partitioned into attempted and unattempted cycles; attempted cycles are complete or incomplete. Retained cycles contribute to the command result."
+    },
+    "execution": {
+      "type": "object",
+      "required": [
+        "connections",
+        "priming",
+        "request_operations",
+        "trials"
+      ],
+      "properties": {
+        "connections": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/execution_connections"
+        },
+        "priming": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/execution_priming"
+        },
+        "request_operations": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/execution_request_operations"
+        },
+        "trials": {
+          "$ref": "#/$defs/execution_trials"
+        },
+        "cycles": {
+          "$ref": "#/$defs/execution_cycles"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Observed accounting for connections, priming and measured work, with distinct attempted, rank-complete and retained populations."
+    },
+    "result": {
+      "type": "object",
+      "required": [
+        "kind",
+        "completion",
+        "execution",
+        "measurement",
+        "acquisition_failures"
+      ],
+      "properties": {
+        "kind": {
+          "const": "result"
+        },
+        "completion": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/completion"
+        },
+        "execution": {
+          "$ref": "#/$defs/execution"
+        },
+        "measurement": {
+          "$ref": "#/$defs/measurement"
+        },
+        "acquisition_failures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/acquisition_failure"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "description": "Terminal acquisition completion and observed execution, plus command-owned aggregates or inference."
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/tantosec/tturl/main/cmd/tturl/doc/schemas/tturl-measure-v1.schema.json"
+}

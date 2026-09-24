@@ -1,0 +1,3 @@
+# Built binary from an in-place build (e.g. `go build .` run in this dir).
+# The .exe form is caught by the module-root .gitignore's *.exe rule.
+/tturl

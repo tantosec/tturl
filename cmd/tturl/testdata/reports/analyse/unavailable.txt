@@ -1,0 +1,43 @@
+================================================================================
+                                 tturl analyse
+================================================================================
+
+----------------------------------- Requests -----------------------------------
+
+Target: https://example.test
+
+  A       GET  /request/0
+  B       GET  /request/1
+  C       GET  /request/2
+
+Total: 3 requests.
+
+---------------------------------- Experiment ----------------------------------
+
+Design: 6 balanced rotation cycles (18 trials, 54 measured request operations).
+Arrangement: rotate; each request occupies every position once per cycle.
+Priming: none; early trials may include cold-state effects.
+Sensitivity: 6 cycles is below the 100-cycle modelled default; this run has
+             lower sensitivity than the validated planning target.
+Power: the fixed workload is a power choice, not a guarantee for this target.
+Pacing: 3 requests/batch; batch-rate ceiling unlimited; request-rate ceiling
+        unlimited; minimum batch-start interval unconstrained.
+Connections: up to 1 active (default).
+Streams: honour the peer's advertised concurrent-stream limit.
+Response limits: 8MiB accepted body per stream; 30s transport time per batch.
+Run timeout: unlimited for live request execution.
+
+------------------------------- Analysis result --------------------------------
+
+Finding unavailable: measured evidence did not pass fixed-design validation.
+Reason: 7 complete cycles are required for 3 requests; got 6.
+Code: insufficient_cycles.
+No statistical result or pair comparison was produced.
+
+---------------------------------- Execution -----------------------------------
+
+Trials: 18/18 attempted; 18 rank-complete; 0 incomplete; 0 retained; 18
+        excluded; 0 unattempted.
+Cycles: 6/6 attempted; 6 complete; 0 incomplete; 0 retained; 0 unattempted.
+Connections: 1 planned; 1 observed; 0 replacements.
+Measured request operations: 54 attempted; 54 rank-complete; 0 retained.

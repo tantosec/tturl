@@ -1,0 +1,18 @@
+
+---------------------------------- Execution -----------------------------------
+
+Comparisons: 0 attempted; 0 rank-complete; 0 incomplete; unlimited maximum.
+Measured request operations: 0 attempted; 0 rank-complete; 0 retained.
+Connections: 4 planned; 6 observed; 2 replacements.
+Priming batches: 18 attempted; 16 rank-complete; 2 incomplete.
+Priming request operations: 18 attempted; 16 rank-complete; excluded from
+                            inference.
+Priming failures:
+  acquisition_failed: 1 incomplete batch across 1 connection.
+    Cause: EOF
+  acquisition_failed: 1 incomplete batch across 1 connection.
+    Cause: unexpected EOF
+Caution: incomplete priming may leave cold-state effects in adaptive
+         comparisons.
+Caution: 2 connection replacements changed connection state.
+Completion: stopped.

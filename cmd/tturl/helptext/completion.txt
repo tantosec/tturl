@@ -1,0 +1,81 @@
+Shell completion lets Bash, Zsh, or fish suggest tturl commands, help topics,
+options, values, and relevant paths. It understands the preamble/block boundary,
+so global options disappear after '--block' while request options remain.
+
+tturl completion SHELL writes a shell-native loader to stdout. The loader asks
+the tturl executable on PATH for candidates as you type. It does not read
+request files or send traffic.
+
+Put '-s' or '--silent' before SHELL or a sole help selector to suppress
+diagnostics. Repeated leading switches are accepted. See tturl help output
+for diagnostic channels and exit statuses.
+
+Generating a loader does not install or activate it: source it for the current
+session or save it where the shell discovers completion files.
+
+## Try it for this session
+
+For Zsh, its completion system must already be initialised. If .zshrc or a
+shell framework has not done so, run:
+
+  autoload -Uz compinit
+  compinit
+
+  Bash:  source <(tturl completion bash)
+  Zsh:   source <(tturl completion zsh)
+  fish:  tturl completion fish | source
+
+Type a prefix, then press Tab:
+
+  tturl help get
+  tturl measure --arr
+  tturl race --report j
+  tturl race --block https://127.0.0.1:8443/ --na
+
+Shell completion suggests syntax. The command still validates what you run.
+
+## Install for future sessions
+
+Bash with bash-completion discovers command files in its completion directory:
+
+  mkdir -p ~/.local/share/bash-completion/completions
+  tturl completion bash \
+    > ~/.local/share/bash-completion/completions/tturl.bash
+
+Zsh discovers completion functions through fpath:
+
+  mkdir -p ~/.zfunc
+  tturl completion zsh > ~/.zfunc/_tturl
+
+Add the directory before compinit in .zshrc. If needed, initialise completion
+with:
+
+  fpath=(~/.zfunc $fpath)
+  autoload -Uz compinit
+  compinit
+
+fish discovers command-named files in its user completion directory:
+
+  mkdir -p ~/.config/fish/completions
+  tturl completion fish > ~/.config/fish/completions/tturl.fish
+
+These are common locations, not tturl requirements. Use the directory expected
+by your shell or package manager.
+
+On Windows, use a Bash, Zsh, or fish environment; tturl does not generate native
+PowerShell completion.
+
+Regenerate an installed loader after upgrading tturl, and make sure the intended
+tturl is first on PATH.
+
+## File suggestions
+
+Shell completion offers paths only where the grammar accepts them: report
+destinations, @file body inputs, '--data-urlencode' NAME@FILE inputs,
+multipart @file and <file values, and '--vary' @file sources. It lists
+matching paths without reading file contents.
+
+## Next steps
+
+  tturl help requests          Learn the request grammar completion follows
+  tturl help getting-started   Run a first local experiment

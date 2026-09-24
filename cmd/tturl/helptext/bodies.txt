@@ -1,0 +1,131 @@
+A request can use one body kind: data, multipart form, or JSON. Body kinds
+cannot be mixed. A declared body makes POST the default method;
+'--request' (or '-X') overrides that method without removing the body.
+
+## Data bodies
+
+Data inputs are joined with '&' in command-line order, including inputs
+inherited from the preamble. Unless request options set or suppress it, their
+generated Content-Type is application/x-www-form-urlencoded.
+
+- '--data' (or '-d') and '--data-ascii' add inline data. A leading @file reads
+  a file and removes its CR, LF, and NUL bytes.
+- '--data-binary' also accepts @file and preserves every byte.
+- '--data-raw' treats its argument literally, including a leading '@'.
+- '--data-urlencode' form-encodes content: space becomes '+', while other bytes
+  outside the RFC 3986 unreserved set become uppercase %HH. It accepts content,
+  =content, name=content, @file, or name@file. The =content form drops its
+  leading '='. When a name is present, it and '=' remain literal.
+
+A single empty data input still declares a body, selects POST, and generates
+Content-Type, but constructs zero body bytes.
+
+## Multipart forms
+
+'--form' (or '-F') accepts name=content. Content may be literal, @file for a
+file upload, or <file for a field value read from a file. ';type=' sets the
+part's Content-Type. An @file upload may also use ';filename='; otherwise its
+filename comes from the source path. tturl guesses an upload's Content-Type
+from its extension and uses application/octet-stream when the type is unknown.
+
+Repeat '-F' to add parts. Use one '-F' for each upload: curl's @one,two
+multi-file form, ';headers=', and ';encoder=' extensions are not supported.
+
+'--form-string' also accepts name=value but treats everything after the first
+'=' as the literal value. Ordinary '-F' does not interpret curl's quoted-content
+grammar: quote marks remain literal and semicolons still begin sub-options.
+'--form-escape' changes field-name and filename escaping from percent encoding
+to backslash escaping.
+
+Unless request options set or suppress it, tturl generates a
+multipart/form-data Content-Type containing the boundary.
+
+tturl keeps generated multipart framing constant across measured requests,
+fan variants, repeats, and priming requests in one invocation. A later
+invocation chooses a fresh boundary.
+
+## JSON
+
+'--json' accepts inline JSON or @file. One input is sent byte-for-byte and may
+be any valid JSON value. With several inputs, the first is the document and the
+rest are RFC 7386 merge patches, accumulated across the preamble and block.
+The base and every patch must then be objects. Object keys merge recursively,
+null deletes a key, and the result is serialised as compact JSON.
+
+JSON generates Content-Type: application/json and Accept: application/json
+unless request options explicitly set or suppress either field.
+
+## Files and inherited bodies
+
+Within a block, body inputs append to inherited inputs of the same kind.
+'--reset-body' discards the complete inherited body before another body kind
+is chosen.
+
+For each expanded request group, tturl reads referenced files and materialises
+the complete body in memory after parsing and before opening a connection.
+'--repeat' copies and later trials reuse those exact bytes; files are not reread
+during collection. With '--vary', each distinct body path is loaded once per
+resolved block's expansion. Referenced body bytes vary by default; filesystem
+paths stay literal. Read tturl help vary for '--vary-file-content=false' and
+substitution order.
+
+Where a flag recognises @file or <file, an exact filename of '-' reads standard
+input: @-, name@-, and multipart name=@- or name=<-. A path such as ./- reads
+a regular file. '--data-raw' '@-', '--form-string' 'name=@-', and
+'--data-urlencode' 'name=@-' remain literal inputs.
+
+The first reference reads from the current stream position through EOF into
+memory. Every body and variation-source reference shares this invocation's
+raw snapshot, including separate blocks, variants, repeats and warmups.
+Input is materialised in memory without a stdin size cap.
+
+Multipart name=@- defaults to filename '-' and application/octet-stream;
+';filename=' and ';type=' override these defaults. name=<- is a field value.
+
+For example, inspect a generated body before sending it:
+
+  printf 'message=hello' | tturl race --dry-run --verbose \
+    --data-binary @- https://example.test/
+
+## Release body tails together
+
+By default, the arrival-order commands withhold the final byte of each non-
+empty request body. tturl releases every complete header block through one
+TLS record, transfers body prefixes, then releases every withheld tail with
+END_STREAM in one TLS record.
+Bodyless and explicitly empty requests end with the header release instead.
+
+With tail withholding enabled, the complete final release, including HTTP/2
+frame overhead, must fit in one 16 KiB TLS plaintext record. tturl rejects a
+batch that cannot preserve that release. '--body-bytes-withheld' 0 instead
+uses greedy, flow-controlled transfer after the header release, with no fixed
+withheld tail or pause. All non-empty bodies still complete with positive DATA
+and END_STREAM frames in the first feasible shared TLS record. Read tturl help
+delivery before changing that option or adding a '--release-delay'.
+
+## Inspect the result
+
+For each non-fanned, non-empty body, the compact Requests section shows a kind
+inferred from Content-Type and a byte count. It adds distinguishing content
+when a concise printable digest is available. A variation fan has its own
+collapsed summary.
+
+'-v' shows every non-empty constructed body in full, using a printable
+representation. It may expose sensitive or large binary values.
+
+This command sends one measured trial containing two URL-encoded POST bodies.
+At default settings, their final bytes are released together:
+
+  tturl race -k --trials 1 \
+    --block https://127.0.0.1:8443/sleep -d 'duration=100us' --name fast \
+    --block https://127.0.0.1:8443/sleep -d 'duration=5000us' --name slow
+
+## Next steps
+
+  tturl help delivery   Control how request-body tails are released together
+  tturl help requests   Inspect resolved body differences and request counts
+  tturl help blocks     Share or replace a body baseline between requests
+  tturl help headers    Understand methods and headers generated by a body
+
+tturl time sends complete requests by default. Its optional last-byte
+synchronisation holds protocol-finalising traffic. Read tturl help time.

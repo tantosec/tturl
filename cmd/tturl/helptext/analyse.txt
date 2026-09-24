@@ -1,0 +1,170 @@
+tturl analyse asks whether request identity systematically changes response
+arrival order in one fixed batch. It balances requests across outbound
+positions, tests the batch as a whole, and reports pairwise findings only if
+the overall test finds a difference.
+
+Use tturl measure when a descriptive ranking answers the question. For a fixed
+statistical test across two through eight requests, use tturl analyse.
+
+## Fixed design and workload
+
+Each run uses complete rotation cycles. A cycle of width W contains W cyclic
+shifts of one shuffled order. It contains W trials and W * W measured request
+operations. Each cycle puts every request in every position once.
+
+Each complete cycle stays on one connection. Different connections may process
+complete cycles concurrently.
+
+'--cycles' N sets the cycle count. Its default depends on request width:
+
+  requests  minimum cycles  default cycles  default trials  default operations
+         2               6             150             300                 600
+         3               7             100             300                 900
+         4               8              75             300               1,200
+         5               9              75             375               1,875
+         6              10              50             300               1,800
+         7              10              50             350               2,450
+         8              11              50             400               3,200
+
+Explicit zero cycles is invalid. Three requests and ten cycles plan 30 trials
+and 90 measured request operations. The workload is fixed before measurement.
+
+A smaller budget is accepted when it still supplies enough complete cycles for
+every pairwise test. The report warns when the budget falls below the
+validated planning target. More work can improve sensitivity, but no budget
+guarantees detection of an unknown effect.
+
+Measured work has a 50,000-operation cap.
+
+'--warmup' N sends N unmeasured trials on each acquired connection. Mark
+blocks '--warmup-only' to use their expanded requests as a distinct
+authored-order priming batch. Otherwise warmups reuse the measured batch. The
+initial plan is priming width times effective connections times N and has its
+own 50,000-request-operation cap. A replacement connection repeats the
+complete sequence and can add attempts. Priming never enters inferential rank
+evidence.
+
+'--padding' and '--padding-at' attach synthetic fields to measured outbound
+positions. The resolved schedule is recorded and replay-validated. Distinct
+priming is unpadded. Choose the schedule before collection. See:
+
+  tturl help padding
+
+## Connections and collection
+
+'--connections' limits concurrent connections. Each initial or replacement
+connection is primed before measured work. Ordinary work keeps each assigned
+cycle on one connection; a connection failure can damage a cycle and make
+inference unavailable. More concurrency can shorten collection while changing
+target contention, so the result describes that concurrent condition.
+
+With '--connections-fit' and a finite pacing limit, tturl fits a connection
+pool using HTTP/2 PING observations. It cannot use more fitted connections than
+the available cycles can keep busy. The batch rate limits trial starts across
+all connections, not cycle starts.
+
+For connection limits, fitting assumptions, and operational cautions, see:
+
+  tturl help delivery
+
+## Read the finding
+
+The report has one of three results:
+
+  Evidence of a request-identity effect on relative arrival order
+  No request-dependent arrival-order effect detected
+  Finding unavailable
+
+The first two are statistical findings. A no-detection result is not evidence
+of equivalence. A positive result does not establish a cause, an elapsed-time
+gap, practical significance, or a vulnerability.
+
+The significance level is fixed at alpha=0.05 for the overall test and
+Holm-adjusted pair decisions.
+
+Inference is conditional on the balanced cycle-assignment mechanism. Under the
+sharp null, reassigning request identities through that mechanism would not
+change the joint arrival ranks. Calibration holds the recorded ranks,
+positions, cycle order, and connections fixed while independently reassigning
+one base request permutation per cycle.
+
+Concurrent cycle outcomes need not be independent. Target-wide load or
+interference by request identity is part of the tested condition.
+
+The overall randomisation test asks whether request identity affects arrival
+order anywhere in the batch. Only when it rejects its null can two-sided pair
+tests support specific pair differences. Holm adjustment accounts for testing
+multiple pairs. Each supported pair shows its recorded earlier or later
+direction, exact precedence count, mean-rank gap, and adjusted p-value. The
+Method section contains the calibration and every pair test.
+
+The report also shows rank distributions, status outcomes, position behaviour,
+and execution accounting. These sections put the finding in context. tturl
+race provides response-level detail when needed.
+
+## Monte Carlo calibration
+
+The analysis enumerates every assignment when the space contains at most
+9,999. For a larger space, it evaluates a fixed set of 9,999 Monte Carlo
+assignments; the JSON report calls them draws.
+
+Computation begins after collection, uses only the recorded evidence, sends no
+additional requests, and does not affect when acquisition stops.
+
+## Replayable JSONL
+
+'--report' json writes JSON Lines: one run record, every request record, each
+measured trial as it completes, and one terminal result. Only the result
+carries the statistical outcome. A prefix without that result is partial
+acquisition evidence, not a statistical result. A complete stream preserves
+the resolved plan and method seed, assignments, pair tests, and every measured
+trial needed to replay the analysis. Requests and evidence join by request_id.
+The result separates completion, execution and analysis. Available analysis
+records a finding status difference_detected or no_difference_detected,
+global_test, request statistics and pair_tests. Unavailable analysis records a
+reason code and diagnostic message. Pair significant agrees with adjusted_p
+and alpha.
+
+'--capture-headers' and '--capture-body' add response evidence. For
+'--capture-body', SIZE is a byte count with an optional B, KiB, MiB, or GiB
+suffix, or 'unlimited'. The limit bounds only each retained body prefix, and
+its 'unlimited' value does not remove the receive limit. The separate
+'--response-body-max' limit defaults to 8 MiB, and '--batch-timeout' defaults
+to 30s. Both cover priming and measured batches; crossing either makes the
+fixed analysis unavailable. Header capture does not change the 1 MiB decoded
+header-section parser limit.
+
+Dispatch timestamps describe outbound wall-clock activity, not response
+timing.
+
+For shared framing, partial-stream, capture, and encoding details, see:
+
+  tturl help json
+
+## Exit status
+
+The command exits zero after either a difference or no-detection finding. Exit
+two identifies an error classified as command usage, such as invalid option
+syntax or an unsupported resolved width or cycle budget. Exit one covers an
+unavailable finding and operational, request-preparation, acquisition, or
+output failures. Interruption makes the bounded analysis unavailable and exits
+one after recording stopped completion. Exit status does not say whether a
+difference or vulnerability was found.
+
+## Example
+
+Run the default workload against the demo server:
+
+  tturl analyse -k \
+    --block 'https://127.0.0.1:8443/sleep?duration=100us' --name fast \
+    --block 'https://127.0.0.1:8443/sleep?duration=5000us' --name slow
+
+The deliberately large gap should produce an overall difference and a
+supported pair whose recorded direction is fast before slow. The finding
+applies only to the recorded requests and delivery conditions.
+
+## Next steps
+
+  tturl help race      Verify the responses behind a surprising result
+  tturl help measure   Explore the distributions without an inferential claim
+  tturl help design    Bound the conclusion and plan controlled repetitions

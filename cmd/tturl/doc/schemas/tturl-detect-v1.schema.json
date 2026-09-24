@@ -1,0 +1,832 @@
+{
+  "title": "tturl detect JSON Lines record",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/run"
+    },
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/result"
+    }
+  ],
+  "$defs": {
+    "request": {
+      "oneOf": [
+        {
+          "allOf": [
+            {
+              "$ref": "tturl-common-v1.schema.json#/$defs/request"
+            },
+            {
+              "type": "object",
+              "required": [
+                "role"
+              ],
+              "properties": {
+                "role": {
+                  "enum": [
+                    "candidate",
+                    "warmup"
+                  ]
+                }
+              }
+            }
+          ],
+          "unevaluatedProperties": false
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "tturl-common-v1.schema.json#/$defs/request"
+            },
+            {
+              "type": "object",
+              "required": [
+                "role",
+                "supply_limit"
+              ],
+              "properties": {
+                "role": {
+                  "const": "baseline"
+                },
+                "supply_limit": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 1
+                }
+              }
+            }
+          ],
+          "unevaluatedProperties": false
+        }
+      ]
+    },
+    "acquisition": {
+      "allOf": [
+        {
+          "$ref": "tturl-common-v1.schema.json#/$defs/acquisition"
+        },
+        {
+          "type": "object",
+          "required": [
+            "in_flight_comparison_limit"
+          ],
+          "properties": {
+            "in_flight_comparison_limit": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false,
+      "description": "Resolved live transport, execution and receive controls, independent of assignment and inference."
+    },
+    "run": {
+      "allOf": [
+        {
+          "$ref": "tturl-common-v1.schema.json#/$defs/run_envelope"
+        },
+        {
+          "type": "object",
+          "required": [
+            "schema",
+            "command",
+            "argv",
+            "plan",
+            "acquisition",
+            "method"
+          ],
+          "properties": {
+            "schema": {
+              "const": "tturl.detect/v1"
+            },
+            "command": {
+              "const": "detect"
+            },
+            "argv": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "prefixItems": [
+                {
+                  "const": "detect"
+                }
+              ]
+            },
+            "plan": {
+              "$ref": "#/$defs/plan"
+            },
+            "acquisition": {
+              "$ref": "#/$defs/acquisition"
+            },
+            "method": {
+              "$ref": "#/$defs/method"
+            }
+          }
+        },
+        {
+          "properties": {
+            "acquisition": {
+              "properties": {
+                "delivery": {
+                  "properties": {
+                    "selection": {
+                      "not": {
+                        "properties": {
+                          "state": {
+                            "const": "skipped_single_trial"
+                          }
+                        },
+                        "required": [
+                          "state"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "plan": {
+      "type": "object",
+      "required": [
+        "width",
+        "comparison_limit",
+        "padding",
+        "warmup",
+        "priming"
+      ],
+      "properties": {
+        "width": {
+          "type": "object",
+          "required": [
+            "requested",
+            "effective"
+          ],
+          "properties": {
+            "requested": {
+              "type": "integer",
+              "minimum": 2
+            },
+            "effective": {
+              "type": "integer",
+              "minimum": 2
+            }
+          },
+          "additionalProperties": false
+        },
+        "comparison_limit": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "padding": {
+          "type": "array",
+          "items": {
+            "$ref": "tturl-common-v1.schema.json#/$defs/padding"
+          }
+        },
+        "warmup": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/warmup"
+        },
+        "priming": {
+          "type": "object",
+          "required": [
+            "initial_request_operations",
+            "maximum_request_operations"
+          ],
+          "properties": {
+            "initial_request_operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "maximum_request_operations": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "description": "Requested work and resolved experimental assignment; execution records what was attempted."
+    },
+    "method": {
+      "type": "object",
+      "required": [
+        "id",
+        "strategy",
+        "direction",
+        "false_positive_risk",
+        "false_negative_risk",
+        "edge"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[ -~]+$"
+        },
+        "strategy": {
+          "type": "object",
+          "required": [
+            "requested",
+            "resolved"
+          ],
+          "properties": {
+            "requested": {
+              "enum": [
+                "auto",
+                "peer-first",
+                "rolling-peer-first",
+                "baseline-confirmed",
+                "rolling-baseline-confirmed",
+                "baseline-reserved",
+                "rolling-baseline-reserved"
+              ]
+            },
+            "resolved": {
+              "enum": [
+                "peer-first",
+                "rolling-peer-first",
+                "baseline-confirmed",
+                "rolling-baseline-confirmed",
+                "baseline-reserved",
+                "rolling-baseline-reserved"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "direction": {
+          "enum": [
+            "early",
+            "late",
+            "either"
+          ]
+        },
+        "false_positive_risk": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "exclusiveMaximum": 1,
+          "description": "Requested upper limit on the method's false-positive error probability."
+        },
+        "false_negative_risk": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "exclusiveMaximum": 1,
+          "description": "Requested upper limit on the method's false-negative error probability."
+        },
+        "edge": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "exclusiveMaximum": 0.5,
+          "description": "Positive directional rank advantage excluded by a negative finding, on the method's normalised scale."
+        }
+      },
+      "additionalProperties": false
+    },
+    "guarantee_positive": {
+      "type": "object",
+      "required": [
+        "error_direction",
+        "error_risk_limit"
+      ],
+      "properties": {
+        "error_direction": {
+          "const": "false_positive"
+        },
+        "error_risk_limit": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "exclusiveMaximum": 1
+        }
+      },
+      "additionalProperties": false,
+      "description": "Actual method false-positive risk guarantee for the found direction, including its direction allocation."
+    },
+    "guarantee_negative": {
+      "type": "object",
+      "required": [
+        "error_direction",
+        "error_risk_limit"
+      ],
+      "properties": {
+        "error_direction": {
+          "const": "false_negative"
+        },
+        "error_risk_limit": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "exclusiveMaximum": 1
+        }
+      },
+      "additionalProperties": false,
+      "description": "Actual method false-negative risk guarantee for excluding the configured directional edge."
+    },
+    "finding": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "request_id",
+            "direction",
+            "guarantee"
+          ],
+          "properties": {
+            "status": {
+              "const": "found"
+            },
+            "request_id": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "direction": {
+              "enum": [
+                "early",
+                "late"
+              ]
+            },
+            "guarantee": {
+              "$ref": "#/$defs/guarantee_positive"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "excluded_edge",
+            "guarantee"
+          ],
+          "properties": {
+            "status": {
+              "const": "negative"
+            },
+            "excluded_edge": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "exclusiveMaximum": 0.5
+            },
+            "guarantee": {
+              "$ref": "#/$defs/guarantee_negative"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "const": "inconclusive"
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "description": "Found candidate and observed direction, excluded negative edge, or budget-limited inconclusive finding."
+    },
+    "inference": {
+      "type": "object",
+      "required": [
+        "samples",
+        "mean_rank",
+        "normalised_mean_rank",
+        "positive_log_evidence",
+        "elimination_log_evidence",
+        "eliminated"
+      ],
+      "properties": {
+        "samples": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mean_rank": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Mean zero-based arrival rank over this object's samples; null when no observations exist."
+        },
+        "normalised_mean_rank": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Mean rank divided by effective batch width minus one, zero at width one; null exactly when mean_rank is null."
+        },
+        "positive_log_evidence": {
+          "type": "number"
+        },
+        "elimination_log_evidence": {
+          "type": "number"
+        },
+        "eliminated": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Candidate participation while in contention; logarithmic evidence uses natural logs. Filler reuse after elimination contributes only to physical evidence."
+    },
+    "request_stats": {
+      "type": "object",
+      "required": [
+        "request_id",
+        "physical",
+        "status_counts",
+        "status_varied",
+        "non_2xx_observed"
+      ],
+      "properties": {
+        "request_id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "physical": {
+          "type": "object",
+          "required": [
+            "participations",
+            "mean_rank",
+            "normalised_mean_rank"
+          ],
+          "properties": {
+            "participations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "mean_rank": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "Mean zero-based arrival rank over this object's samples; null when no observations exist."
+            },
+            "normalised_mean_rank": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Mean rank divided by effective batch width minus one, zero at width one; null exactly when mean_rank is null."
+            }
+          },
+          "additionalProperties": false,
+          "description": "Every retained physical inclusion, including baseline and eliminated-candidate filler reuse."
+        },
+        "inference": {
+          "$ref": "#/$defs/inference"
+        },
+        "status_counts": {
+          "type": "array",
+          "items": {
+            "$ref": "tturl-common-v1.schema.json#/$defs/status_count"
+          },
+          "description": "Sparse positive observed status counts, unique and increasing by status."
+        },
+        "status_varied": {
+          "type": "boolean"
+        },
+        "non_2xx_observed": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Derived request evidence joined through the global catalogue; requests increase by request ID."
+    },
+    "detection": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "state",
+            "finding",
+            "commit_threshold_log_evidence",
+            "requests",
+            "status_distributions_differ"
+          ],
+          "properties": {
+            "state": {
+              "const": "available"
+            },
+            "finding": {
+              "$ref": "#/$defs/finding"
+            },
+            "commit_threshold_log_evidence": {
+              "type": "number",
+              "description": "Natural-log threshold for a positive evidence commitment."
+            },
+            "requests": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/request_stats"
+              }
+            },
+            "status_distributions_differ": {
+              "type": "boolean",
+              "description": "Descriptive response-status comparison across participating requests; does not affect inference."
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "state"
+          ],
+          "properties": {
+            "state": {
+              "const": "unavailable"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "state",
+            "requests",
+            "status_distributions_differ"
+          ],
+          "properties": {
+            "state": {
+              "const": "unavailable"
+            },
+            "requests": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/request_stats"
+              },
+              "minItems": 1
+            },
+            "status_distributions_differ": {
+              "type": "boolean",
+              "description": "Descriptive response-status comparison across participating requests; does not affect inference."
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "description": "Adaptive method availability and finding, with physical and inferential evidence in one global request collection."
+    },
+    "priming_attempt": {
+      "type": "object",
+      "required": [
+        "worker_id",
+        "connection_id",
+        "request_operations",
+        "failure",
+        "attempt",
+        "replacement",
+        "complete"
+      ],
+      "properties": {
+        "worker_id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "connection_id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "request_operations": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failure": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "tturl-common-v1.schema.json#/$defs/failure"
+            }
+          ]
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "replacement": {
+          "type": "boolean"
+        },
+        "complete": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Observed connection preparation attempt, including replacement preparation and nullable failure."
+    },
+    "acquisition_failure": {
+      "type": "object",
+      "required": [
+        "worker_id",
+        "failure",
+        "replacement"
+      ],
+      "properties": {
+        "worker_id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failure": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/failure"
+        },
+        "replacement": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Observed acquisition attempt failure; diagnostic population is separate from retained rank evidence."
+    },
+    "comparison_failure": {
+      "type": "object",
+      "required": [
+        "worker_id",
+        "connection_id",
+        "request_participations",
+        "assignments",
+        "failure"
+      ],
+      "properties": {
+        "worker_id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "connection_id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "request_participations": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "assignments": {
+          "type": "array",
+          "items": {
+            "$ref": "tturl-common-v1.schema.json#/$defs/assignment"
+          }
+        },
+        "failure": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/failure"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Incomplete measured comparison with intended request/position assignments and a common failure."
+    },
+    "execution_comparisons": {
+      "type": "object",
+      "required": [
+        "maximum",
+        "attempted",
+        "rank_complete",
+        "incomplete"
+      ],
+      "properties": {
+        "maximum": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "attempted": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rank_complete": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "incomplete": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "description": "Physical measured comparison attempts; maximum is null for unlimited work. Failed attempts are incomplete, separately from completed solver cost."
+    },
+    "execution": {
+      "type": "object",
+      "required": [
+        "connections",
+        "priming",
+        "request_operations",
+        "comparisons"
+      ],
+      "properties": {
+        "connections": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/execution_connections"
+        },
+        "priming": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/execution_priming"
+        },
+        "request_operations": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/execution_request_operations"
+        },
+        "comparisons": {
+          "$ref": "#/$defs/execution_comparisons"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Observed accounting for connections, priming and measured work, with distinct attempted, rank-complete and retained populations."
+    },
+    "result": {
+      "type": "object",
+      "required": [
+        "kind",
+        "completion",
+        "execution",
+        "detection",
+        "priming_attempts",
+        "acquisition_failures",
+        "comparison_failures"
+      ],
+      "properties": {
+        "kind": {
+          "const": "result"
+        },
+        "completion": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/completion"
+        },
+        "execution": {
+          "$ref": "#/$defs/execution"
+        },
+        "detection": {
+          "$ref": "#/$defs/detection"
+        },
+        "priming_attempts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/priming_attempt"
+          }
+        },
+        "acquisition_failures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/acquisition_failure"
+          }
+        },
+        "comparison_failures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/comparison_failure"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "detection": {
+                "properties": {
+                  "state": {
+                    "const": "unavailable"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "completion": {
+                "properties": {
+                  "state": {
+                    "enum": [
+                      "stopped",
+                      "failed"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "description": "Terminal acquisition completion and observed execution, plus command-owned aggregates or inference."
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/tantosec/tturl/main/cmd/tturl/doc/schemas/tturl-detect-v1.schema.json"
+}

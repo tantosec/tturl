@@ -1,0 +1,173 @@
+tturl race answers the most direct question tturl can ask: what happened when
+this batch was sent together? It reports each request's outcome and arrival
+rank, if one exists. It does not aggregate ranks or make a statistical finding.
+
+For timing inference, individual responses show what happened at each rank. In a
+state-change race, response differences or resulting application state may
+instead provide the evidence. Arrival rank may not matter.
+
+One request supports response inspection, but supplies no comparative arrival
+order. Use at least two requests to compare their arrival ranks.
+
+## Trials and arrangement
+
+One trial releases the complete batch on one HTTP/2 connection and reports
+responses in arrival order. Final response headers confer a rank regardless of
+HTTP status. A reset before those headers has no response or rank. A reset
+after them preserves the response and rank but may truncate its body and make
+the trial incomplete. Trial success means that batch transport completed
+without an error, not that every HTTP status was successful.
+
+Overall run completion is separate; a run can complete after incomplete trials.
+
+'--trials' N sets the trial count. By default, tturl race runs one trial in
+authored order. With multiple trials, it randomises outbound positions
+independently in each trial. Use '--arrange' to choose none, rotate, or random.
+Rotation may increase the trial count to complete a full position cycle.
+
+'--trials' unlimited runs until interrupted. It also stops cleanly when a report
+consumer closes its pipe.
+
+Interruption records stopped completion. It exits zero for an unbounded run,
+where stopping fulfils the request, and one for unfinished bounded work.
+
+## Warmups and priming batches
+
+'--warmup' N sends N unmeasured trials on each acquired connection before that
+connection's measured work. Execution reports warmup attempts separately. By
+default, warmups use the measured batch under the same arrangement policy.
+
+A '--warmup-only' block adds its requests to a separate priming batch instead of
+the measured batch. The priming batch runs in authored order without positional
+padding. All requests must share an origin. At least one measured request must
+remain, and '--warmup-only' requires a positive '--warmup' count.
+
+## Positional padding
+
+'--padding' and '--padding-at' add synthetic fields by outbound position. The
+resolved schedule stays fixed as request identities move and does not apply to a
+distinct priming batch. It is heuristic and can change application behaviour;
+the Experiment section and JSON report record it. See:
+
+  tturl help padding
+
+## Read the tturl race report
+
+The Requests section shows the concrete measured batch and any separate priming
+batch. The Experiment section shows how the batches were arranged and delivered.
+Each measured trial contains:
+
+  rank      zero-based response arrival rank (0 arrived first)
+  pos       zero-based outbound position (0 was sent first)
+  request   stable request label
+  response  HTTP status, accepted body size, Content-Length mismatch,
+            extraction, or stream reset
+
+Status counts summarise each trial. Execution reports warmup attempts and
+measured trials separately, including any failures.
+
+## Capture and extract response evidence
+
+By default, the JSON report from tturl race includes response status, accepted
+body size, body digest, and any declared Content-Length. '--capture-headers'
+adds complete response headers and trailers. '--capture-body' SIZE retains a
+body prefix. SIZE is a non-negative byte count with an optional B, KiB, MiB, or
+GiB suffix. Use 'unlimited' to retain every body byte accepted before completion
+or reset. The separate '--response-body-max' receive limit still applies.
+
+Header capture changes retained evidence, not parser acceptance. The 1 MiB
+decoded header-section limit applies to every response header and trailer block
+in either mode. See 'tturl help output' for the shared retention contract.
+
+'--extract-regex' REGEX searches the retained body prefix. Repeat the option to
+apply more than one expression. It requires '--capture-body'. Without named
+groups, tturl extracts each whole match. With named groups, it extracts only
+those groups. For example, suppose the body contains order-417:
+
+  --extract-regex 'order-[0-9]+'          whole match: order-417
+  --extract-regex 'order-(?P<id>[0-9]+)'  named group id: 417
+
+A group name may appear only once in an expression. This is rejected:
+
+  --extract-regex '(?P<id>[0-9]+)-(?P<id>[0-9]+)'
+
+The report says whether the search covered every byte accepted or only the
+retained prefix. A stream reset can still truncate the response.
+
+Capture can produce large reports. tturl applies its capture limit as body data
+arrives and retains at most that many accepted bytes from each response. Larger
+capture limits increase retained data and report-encoding work. JSONL trial
+records are written as trials complete, and the report grows with them. See
+'tturl help delivery' for receive and batch limits.
+
+## JSONL evidence
+
+A normally completed '--report' json stream writes run metadata, concrete
+requests, distinct warmup and measured trial records, and a terminal result as
+JSONL. Dense request_id values link outcomes to their concrete requests. The
+plan records requested and planned trials, batch widths, padding and extractor
+definitions. Acquisition records delivery, TLS verification, receive limits and
+capture settings. Each trial has an explicit trial_index and connection_id.
+The result records execution accounting, completion and sparse reset counts;
+requests omitted from reset_counts have zero resets. Priming reuses measured
+request IDs when no separate warmup request set is configured.
+
+For framing, schemas, terminal state, capture, bytes and timestamps, see:
+
+  tturl help json
+
+With '--trials' unlimited, a downstream command can decide how many trial
+records to keep. The following pipeline keeps ten compact JSON trial records:
+
+  tturl race -k --trials unlimited --report json \
+    --block 'https://127.0.0.1:8443/sleep?duration=100us' --name fast \
+    --block 'https://127.0.0.1:8443/sleep?duration=5000us' --name slow |
+    jq -c 'select(.kind == "trial")' |
+    head -n 10
+
+jq selects trial records and writes one JSON object per line. After head reads
+ten lines, it exits and closes the pipe. jq then closes its input, and tturl
+stops sending trials cleanly.
+
+## Inspect arrival order
+
+Run three trials against the local demo server:
+
+  tturl race -k --trials 3 \
+    --block 'https://127.0.0.1:8443/sleep?duration=100us' --name fast \
+    --block 'https://127.0.0.1:8443/sleep?duration=5000us' --name slow
+
+The fast request should usually arrive first. Small runs such as this are useful
+for inspecting behaviour, but not for establishing a stable pattern.
+
+## Exercise a state-change race
+
+Create a fresh one-use quota:
+
+  token=$(curl -sk -X POST https://127.0.0.1:8443/quotas \
+    | jq -r '.result.token')
+
+Release eight quota uses as one batch and collect their receipt numbers:
+
+  tturl race -k --repeat 8 -X POST --report json \
+    --capture-body unlimited \
+    --extract-regex '"receipt":(?P<receipt>[0-9]+)' \
+    "https://127.0.0.1:8443/quotas/$token/use" |
+    jq -sr '
+      [ .[] | select(.kind == "trial")
+        | .outcomes[].response.extracts[]?.matches[].captures[]
+        | select(.name == "receipt") | .data | tonumber ]
+      | sort | "accepted receipts: \(join(", "))"
+    '
+
+Illustrative output; the accepted count varies:
+
+  accepted receipts: 1, 2, 3
+
+More than one receipt demonstrates the quota overrun. In this experiment,
+response content is the evidence and arrival rank does not matter.
+
+## Next steps
+
+  tturl help measure   Summarise arrival ranks across repeated trials
+  tturl help design    Control position, shared state, and load before scaling

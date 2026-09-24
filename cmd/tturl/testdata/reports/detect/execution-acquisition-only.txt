@@ -1,0 +1,11 @@
+
+---------------------------------- Execution -----------------------------------
+
+Comparisons: 0 attempted; 0 rank-complete; 0 incomplete; unlimited maximum.
+Measured request operations: 0 attempted; 0 rank-complete; 0 retained.
+Connections: 128 planned; 0 observed; 0 replacements.
+Initial acquisition failures:
+  acquisition_failed: 128 failed attempts across 128 workers.
+    Cause: dial tcp: EOF
+Completion: failed.
+Error: EOF

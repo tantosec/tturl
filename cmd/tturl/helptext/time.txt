@@ -1,0 +1,204 @@
+tturl time performs traditional time-based measurements. It measures each
+request from initial release to complete, valid final response headers and
+summarises its duration distribution. It does not rank response arrivals,
+infer significance or identify a vulnerability.
+
+Requests run sequentially by default. Each connection carries one active
+request. Optional '--synchronise' aligns request release across separate
+connections; it still measures each request independently. See tturl help
+commands to choose the measurement that answers your question.
+
+Note: tturl time sends one active request per connection
+
+## Define the experiment
+
+One trial contains every concrete measured request after expansion and repeat.
+The default is one trial, authored order, no warmup and sequential execution
+on reused connections. Synchronisation and last-byte synchronisation default
+to false; single-record delivery defaults to true. Multiple trials default to
+random arrangement. Rotate arrangement rounds bounded trials up to whole
+position cycles of batch width W.
+
+Protocol switches use shared request scope. HTTP/2 is the default; '--http2'
+selects it explicitly. Select '--http1.1' in the preamble for every block, or
+inside one block to override its inherited selection. Selecting both versions
+in one scope is an argument error. HTTP/2 requires HTTPS; the selected
+protocol must succeed without fallback. Plain HTTP requires HTTP/1.1 and
+'--single-record=false'; it cannot use '--last-byte-sync'.
+
+For example, start the local target with tturl demo-server, then run:
+
+  tturl time -k --trials 20 \
+    --block 'https://127.0.0.1:8443/sleep?duration=100us' --name short \
+    --block 'https://127.0.0.1:8443/sleep?duration=5000us' --name long
+
+Inspect the retained counts and duration distributions. These include
+transport, protocol parsing and target handling; they are not server execution
+times. '-k' disables certificate verification for this local
+self-signed target.
+
+## Allocate complete workers
+
+Each physical connection carries at most one active request. Sequential
+workers retain one connection per destination pool and drain each response
+before the next request. '--synchronise' gives each request a separate
+compatible connection and coordinates one trial through common gates across
+all pools.
+
+Pools distinguish destination scheme, host, port, protocol and TLS settings. A
+Host override changes HTTP authority, not the TCP destination. Socket pairing
+is randomised within each synchronised worker's compatible pools on every
+trial. This distributes connection exposure without promising balance or
+wire order.
+
+Let D be the measured pool count and W the measured request count. One worker
+needs D connections sequentially or W with synchronisation. Omitting
+'--connections' derives that minimum. An explicit smaller ceiling fails.
+Larger ceilings admit complete workers, bounded by trials or rotation cycles.
+Unused allowance does not create partial workers or request waves.
+
+## Acquire, warm and measure
+
+All admitted workers acquire their complete initial connection sets before any
+warmup request is released. Every worker then completes its warmup before any
+measured request is released. '--warmup' defaults to zero; the initial
+acquisition barrier still applies when warmup is zero.
+
+'--warmup' N requires N complete unmeasured trials per worker. Warmup uses the
+measured requests by default. Sequential trials drain each response before the
+next request. Synchronised trials use distinct compatible connections and the
+same common gates and delivery settings as measurement. Warmup follows the
+selected arrangement. Rotate performs exactly N trials, starting at position
+zero; measured rotation starts at zero independently.
+
+'--warmup-only' blocks select a distinct warmup set and require positive
+warmup. The set must cover exactly the measured destination/protocol pools.
+With synchronisation, its request count in each pool must equal the measured
+count. Sequential warmup may use different per-pool counts. Validation
+precedes any network acquisition.
+
+For K admitted workers, N warmup trials and warmup width Wp, planned initial
+warmup costs K*N trials and K*N*Wp request operations. A replacement restores
+its owner's complete connection set and restarts that worker's N trials,
+including healthy connections. Other workers continue after the initial
+barriers open. Replacement warmup adds observed costs beyond the initial plan.
+Warmup can change target state and never consumes measured trials or cycles.
+
+Every warmup participant must complete its exchange with a fully drained
+response and no failure or reset. An incomplete warmup exchange fails the run,
+preserves partial evidence and prevents further measured admission. A complete
+non-2xx response is acceptable. Limiting captured body bytes does not make a
+complete exchange fail; a receive-limit or framing failure does. Normal
+connection retirement after a complete exchange can interrupt a sequential
+warmup trial. Bounded recovery restarts the whole worker phase, retaining
+completed and unattempted evidence. Measured requests are never replayed.
+
+## Control release and bounds
+
+By default, each complete HTTPS request uses one TLS application record.
+'--single-record=false' permits explicitly segmented larger requests.
+'--last-byte-sync' holds protocol-finalising traffic in a separate record. Its
+main prefix remains subject to the selected record-size policy.
+
+For HTTP/1.1, the held byte completes the header terminator, fixed-length
+body, or chunked framing. For bodyless HTTP/2 it completes the initial header
+block; for a body it carries the final DATA byte and END_STREAM. The fragment
+need not be one literal wire byte or trigger server processing.
+
+With synchronisation, all senders pass the initial gate together. Last-byte
+mode adds a final gate after every prefix completes and finalising credit is
+ready. A nonzero '--release-delay' requires last-byte mode and begins after
+readiness. The primary duration includes transmission, final-gate waiting and
+this delay. Local gates do not guarantee simultaneous network arrival or
+remote execution.
+
+'--batch-rate-max' and '--request-rate-max' bound global trial starts,
+including warmup. The request cost is the upcoming trial width. They do not
+space requests inside a trial. Ready workers enter pacing admission in FIFO
+order; unavailable workers do not block them. This does not promise equal
+worker counts or throughput. See tturl time -h for the complete
+command reference.
+
+'--request-timeout' defaults to 30s for each acquisition, initial readiness
+and request execution separately. Acquisition covers all setup stages.
+Execution starts at that request's initial release and continues through
+delivery and response draining. Deliberate trial-start pacing pauses
+readiness. Initial barrier waits do not consume request-phase budgets; the run
+timeout and cancellation remain active. Unlimited removes all three finite
+budgets; cancellation still applies. A finite request timeout must exceed the
+configured release delay.
+
+'--run-timeout' bounds live acquisition, warmup, execution and disposal.
+Request preparation and local source reads precede this live budget.
+'--response-body-max' defaults to 8MiB of accepted body bytes per response.
+Each decoded header or trailer section is limited to 1MiB.
+
+## Interpret and retain evidence
+
+Text summarises the duration distribution for each stable request identity. It
+shows count, minimum, p50, p90, p95, p99, maximum, mean and population
+standard deviation. Percentiles use R7 interpolation. No observations means
+unavailable statistics; one observation has zero population spread.
+'--verbose' expands request descriptions and preserves the same
+duration statistics.
+
+Text attaches one shared unit (ns, us, ms or s) to every duration statistic.
+It chooses the largest unit that keeps the smallest non-zero measured duration
+at least one. Standard deviation uses that unit; zero durations and standard
+deviation do not select the scale. JSON retains nanoseconds.
+
+Every valid final-header duration enters the measured population, including
+non-2xx responses, partial trials and subsequent body failures. Warmups are
+excluded. Invalid final headers supply no primary duration. Missing events are
+unavailable rather than zero. Non-2xx status alone does not fail an exchange.
+
+'--report' json writes incremental JSON Lines: run and request definitions,
+phase completions, warmups and trials as they finish, then one terminal
+result. Phase, warmup, trial and result records embed connection lifecycle
+histories. Concurrent trials can finish out of index order. Join by IDs.
+Partial trials retain every planned request, including unattempted members.
+Warmup records identify their worker, initial or replacement phase, zero-based
+phase index and trial index. Initial warmup is phase zero; each restart
+advances it, including interrupted phases. Trial indices restart at zero.
+Phase records mark initial acquisition, each worker's completed warmup and
+usable readiness, and campaign warmup completion.
+
+Each trial has a UTC calendar anchor for provenance. Its six release/response
+milestones and gates are signed integer nanosecond offsets from a monotonic
+baseline shared within that trial. 'duration_ns' subtracts that request's
+initial release from its valid final headers. A zero initial offset is not
+required. Negative gate offsets and early responses are retained. Nanoseconds
+describe representation, not accuracy. Alternative durations can be calculated
+from these milestones.
+
+Capture does not change the timer endpoint or accepted-body limit. Extraction
+searches retained body prefixes after observations. Text aggregates coverage,
+matched responses, total matches and named-group participation; JSON retains
+selected matches and values. Header capture is available only in JSON reports.
+Byte evidence uses the shared lossless encoding; treat captured content and
+argv as sensitive. See tturl help output and tturl help json for framing,
+completion, byte representation and extraction rules.
+
+Exact summary percentiles retain integer samples, so memory grows with valid
+observations, including unlimited runs. JSON records stream with backpressure.
+A bounded run succeeds when all planned trials have been attempted and
+reporting finishes; individual trials can remain incomplete. Fatal recovery,
+run timeout, output failure or unfinished bounded work fails. An unlimited
+user stop succeeds unless an independent operational failure caused it.
+Measured requests are never replayed. Replacement connections have fresh
+identities and worker warmup evidence.
+
+## Preview and platform support
+
+'--dry-run' requires text and previews selected-protocol request content and
+the resolved allocation and planned initial warmup costs without target
+traffic. It reads local request inputs and can create or truncate the selected
+output file after validation. Encoded sizes and HTTP/2 compression state
+remain connection-dependent during live execution.
+
+tturl time supports Linux and macOS. It is unsupported on Windows.
+
+  tturl time -h          Read the complete flag reference
+  tturl help requests    Construct, expand and label request blocks
+  tturl help json        Retain body prefixes and extracted values
+  tturl schema time      Export the current JSON report schema

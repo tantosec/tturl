@@ -1,0 +1,9 @@
+
+---------------------------------- Execution -----------------------------------
+
+Comparisons: 128 attempted; 0 rank-complete; 128 incomplete; unlimited maximum.
+Measured request operations: 256 attempted; 0 rank-complete; 0 retained.
+Connections: 128 planned; 128 observed; 0 replacements.
+Comparison cancellations: 128 incomplete comparisons across 128 connections; 256
+                          attempted request participations.
+Completion: stopped.

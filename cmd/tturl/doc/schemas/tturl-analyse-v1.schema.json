@@ -1,0 +1,758 @@
+{
+  "title": "tturl analyse JSON Lines record",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/run"
+    },
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/trial"
+    },
+    {
+      "$ref": "#/$defs/result"
+    }
+  ],
+  "$defs": {
+    "request": {
+      "allOf": [
+        {
+          "$ref": "tturl-common-v1.schema.json#/$defs/request"
+        },
+        {
+          "type": "object",
+          "required": [
+            "role"
+          ],
+          "properties": {
+            "role": {
+              "enum": [
+                "measured",
+                "warmup"
+              ]
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "acquisition": {
+      "allOf": [
+        {
+          "$ref": "tturl-common-v1.schema.json#/$defs/acquisition"
+        },
+        {
+          "type": "object",
+          "required": [
+            "capture"
+          ],
+          "properties": {
+            "capture": {
+              "$ref": "tturl-common-v1.schema.json#/$defs/capture"
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false,
+      "description": "Resolved live transport, execution and receive controls, independent of assignment and inference."
+    },
+    "run": {
+      "allOf": [
+        {
+          "$ref": "tturl-common-v1.schema.json#/$defs/run_envelope"
+        },
+        {
+          "type": "object",
+          "required": [
+            "schema",
+            "command",
+            "argv",
+            "plan",
+            "acquisition",
+            "method"
+          ],
+          "properties": {
+            "schema": {
+              "const": "tturl.analyse/v1"
+            },
+            "command": {
+              "const": "analyse"
+            },
+            "argv": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "prefixItems": [
+                {
+                  "const": "analyse"
+                }
+              ]
+            },
+            "plan": {
+              "$ref": "#/$defs/plan"
+            },
+            "acquisition": {
+              "$ref": "#/$defs/acquisition"
+            },
+            "method": {
+              "$ref": "#/$defs/method"
+            }
+          }
+        },
+        {
+          "properties": {
+            "acquisition": {
+              "properties": {
+                "delivery": {
+                  "properties": {
+                    "selection": {
+                      "not": {
+                        "properties": {
+                          "state": {
+                            "const": "skipped_single_trial"
+                          }
+                        },
+                        "required": [
+                          "state"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "plan": {
+      "type": "object",
+      "required": [
+        "work",
+        "batch_width",
+        "arrangement",
+        "assignment_unit",
+        "warmup",
+        "padding",
+        "modelled_default_cycles",
+        "below_modelled_default"
+      ],
+      "properties": {
+        "work": {
+          "type": "object",
+          "required": [
+            "planned_cycles",
+            "planned_trials"
+          ],
+          "properties": {
+            "planned_cycles": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "planned_trials": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "batch_width": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 8
+        },
+        "arrangement": {
+          "const": "rotate"
+        },
+        "assignment_unit": {
+          "const": "rotation_cycle"
+        },
+        "warmup": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/warmup"
+        },
+        "padding": {
+          "type": "array",
+          "items": {
+            "$ref": "tturl-common-v1.schema.json#/$defs/padding"
+          }
+        },
+        "modelled_default_cycles": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "below_modelled_default": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Requested work and resolved experimental assignment; execution records what was attempted."
+    },
+    "method": {
+      "type": "object",
+      "required": [
+        "id",
+        "randomisation_seed"
+      ],
+      "properties": {
+        "id": {
+          "const": "analyse-a-r-holm/4"
+        },
+        "randomisation_seed": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "response": {
+      "allOf": [
+        {
+          "$ref": "tturl-common-v1.schema.json#/$defs/response"
+        },
+        {
+          "type": "object",
+          "required": [],
+          "properties": {}
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "outcome": {
+      "allOf": [
+        {
+          "$ref": "tturl-common-v1.schema.json#/$defs/outcome"
+        },
+        {
+          "type": "object",
+          "required": [
+            "response"
+          ],
+          "properties": {
+            "response": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/$defs/response"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false,
+      "description": "One outbound position and global request ID; rank, response and stream facts may be unobserved. Outcomes increase by position."
+    },
+    "trial": {
+      "type": "object",
+      "required": [
+        "kind",
+        "trial_index",
+        "cycle",
+        "shift",
+        "connection_id",
+        "dispatch",
+        "assignments",
+        "failure",
+        "outcomes"
+      ],
+      "properties": {
+        "kind": {
+          "const": "trial"
+        },
+        "trial_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cycle": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "shift": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "connection_id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "dispatch": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/dispatch_times"
+        },
+        "assignments": {
+          "type": "array",
+          "items": {
+            "$ref": "tturl-common-v1.schema.json#/$defs/assignment"
+          },
+          "minItems": 2,
+          "maxItems": 8
+        },
+        "failure": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "tturl-common-v1.schema.json#/$defs/failure"
+            }
+          ]
+        },
+        "outcomes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/outcome"
+          },
+          "maxItems": 8
+        }
+      },
+      "additionalProperties": false,
+      "description": "One measured batch attempt with explicit coordinates; completion order may differ from trial_index order."
+    },
+    "request_stats": {
+      "type": "object",
+      "required": [
+        "request_id",
+        "samples",
+        "mean_rank",
+        "normalised_mean_rank",
+        "status_counts",
+        "status_varied",
+        "non_2xx_observed"
+      ],
+      "properties": {
+        "request_id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "samples": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Retained measured trials containing this request; every measured request has one sample per retained trial."
+        },
+        "mean_rank": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Mean zero-based arrival rank over this object's samples; null when no observations exist."
+        },
+        "normalised_mean_rank": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Mean rank divided by effective batch width minus one, zero at width one; null exactly when mean_rank is null."
+        },
+        "status_counts": {
+          "type": "array",
+          "items": {
+            "$ref": "tturl-common-v1.schema.json#/$defs/status_count"
+          },
+          "description": "Sparse positive observed status counts, unique and increasing by status."
+        },
+        "status_varied": {
+          "type": "boolean"
+        },
+        "non_2xx_observed": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Derived request evidence joined through the global catalogue; requests increase by request ID."
+    },
+    "reason": {
+      "type": "object",
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "enum": [
+            "unsupported_width",
+            "insufficient_cycles",
+            "incomplete_cycle",
+            "invalid_shift",
+            "invalid_arrangement",
+            "invalid_ranks",
+            "invalid_response_status",
+            "mixed_connections",
+            "evidence_too_large",
+            "invalid_workload",
+            "interrupted"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "description": "Analyse-owned evidence eligibility code and diagnostic explanation; distinct from acquisition failure."
+    },
+    "components": {
+      "type": "object",
+      "required": [
+        "l2",
+        "l_infinity"
+      ],
+      "properties": {
+        "l2": {
+          "type": "number"
+        },
+        "l_infinity": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Unscaled observed components of the fixed analyse statistic."
+    },
+    "calibration": {
+      "type": "object",
+      "required": [
+        "method",
+        "draws",
+        "extremes",
+        "p_value",
+        "p_value_kind",
+        "completion_reason"
+      ],
+      "properties": {
+        "method": {
+          "enum": [
+            "exact_randomisation",
+            "monte_carlo_randomisation"
+          ]
+        },
+        "draws": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9999
+        },
+        "extremes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9999
+        },
+        "p_value": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "p_value_kind": {
+          "enum": [
+            "exact",
+            "monte_carlo"
+          ]
+        },
+        "completion_reason": {
+          "enum": [
+            "exact_orbit_complete",
+            "fixed_draw_budget_complete"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "description": "Observed randomisation calibration. Extremes count draws at least as extreme as observed; p_value_kind states exact probability or conservative upper bound."
+    },
+    "global_test": {
+      "type": "object",
+      "required": [
+        "alpha",
+        "statistic",
+        "components",
+        "calibration"
+      ],
+      "properties": {
+        "alpha": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "exclusiveMaximum": 1
+        },
+        "statistic": {
+          "type": "number"
+        },
+        "components": {
+          "$ref": "#/$defs/components"
+        },
+        "calibration": {
+          "$ref": "#/$defs/calibration"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Fixed global statistic and observed calibration; alpha is its decision threshold."
+    },
+    "pair_test": {
+      "type": "object",
+      "required": [
+        "left_request_id",
+        "right_request_id",
+        "trials",
+        "left_before_right",
+        "right_before_left",
+        "mean_rank_difference",
+        "raw_p",
+        "raw_p_upper_bound",
+        "adjusted_p",
+        "adjusted_p_upper_bound",
+        "significant"
+      ],
+      "properties": {
+        "left_request_id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "right_request_id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "trials": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "left_before_right": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "right_before_left": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mean_rank_difference": {
+          "type": "number"
+        },
+        "raw_p": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "raw_p_upper_bound": {
+          "type": "boolean"
+        },
+        "adjusted_p": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "adjusted_p_upper_bound": {
+          "type": "boolean"
+        },
+        "significant": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Canonical left/right global request IDs and precedence counts. Raw and Holm-adjusted p-values carry explicit upper-bound flags; significant agrees with adjusted_p <= global alpha."
+    },
+    "analysis": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "state",
+            "finding",
+            "global_test",
+            "requests",
+            "pair_tests",
+            "status_distributions_differ"
+          ],
+          "properties": {
+            "state": {
+              "const": "available"
+            },
+            "finding": {
+              "type": "object",
+              "required": [
+                "status"
+              ],
+              "properties": {
+                "status": {
+                  "enum": [
+                    "difference_detected",
+                    "no_difference_detected"
+                  ]
+                }
+              },
+              "additionalProperties": false
+            },
+            "global_test": {
+              "$ref": "#/$defs/global_test"
+            },
+            "requests": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/request_stats"
+              },
+              "minItems": 2,
+              "maxItems": 8
+            },
+            "pair_tests": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/pair_test"
+              },
+              "maxItems": 28
+            },
+            "status_distributions_differ": {
+              "type": "boolean",
+              "description": "Descriptive response-status comparison across participating requests; does not affect inference."
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "state",
+            "reason"
+          ],
+          "properties": {
+            "state": {
+              "const": "unavailable"
+            },
+            "reason": {
+              "$ref": "#/$defs/reason"
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "description": "Method-owned availability and scientific finding, independent of acquisition completion."
+    },
+    "execution_trials": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "planned",
+        "attempted",
+        "rank_complete",
+        "incomplete",
+        "unattempted",
+        "retained",
+        "excluded"
+      ],
+      "properties": {
+        "planned": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "attempted": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/non_negative_integer"
+        },
+        "rank_complete": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/non_negative_integer"
+        },
+        "incomplete": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/non_negative_integer"
+        },
+        "unattempted": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/non_negative_integer"
+        },
+        "retained": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/non_negative_integer"
+        },
+        "excluded": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/non_negative_integer"
+        }
+      },
+      "description": "Measured trial attempts. Attempted equals rank_complete plus incomplete; bounded work equals attempted plus unattempted. Retained evidence excludes method-ineligible rank-complete trials where applicable."
+    },
+    "execution_cycles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "planned",
+        "attempted",
+        "complete",
+        "incomplete",
+        "unattempted",
+        "retained"
+      ],
+      "properties": {
+        "planned": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "attempted": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/non_negative_integer"
+        },
+        "complete": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/non_negative_integer"
+        },
+        "incomplete": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/non_negative_integer"
+        },
+        "unattempted": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/non_negative_integer"
+        },
+        "retained": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/non_negative_integer"
+        }
+      },
+      "description": "Whole rotations: planned work is partitioned into attempted and unattempted cycles; attempted cycles are complete or incomplete. Retained cycles contribute to the command result."
+    },
+    "execution": {
+      "type": "object",
+      "required": [
+        "connections",
+        "priming",
+        "request_operations",
+        "trials",
+        "cycles"
+      ],
+      "properties": {
+        "connections": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/execution_connections"
+        },
+        "priming": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/execution_priming"
+        },
+        "request_operations": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/execution_request_operations"
+        },
+        "trials": {
+          "$ref": "#/$defs/execution_trials"
+        },
+        "cycles": {
+          "$ref": "#/$defs/execution_cycles"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Observed accounting for connections, priming and measured work, with distinct attempted, rank-complete and retained populations."
+    },
+    "result": {
+      "type": "object",
+      "required": [
+        "kind",
+        "completion",
+        "execution",
+        "analysis"
+      ],
+      "properties": {
+        "kind": {
+          "const": "result"
+        },
+        "completion": {
+          "$ref": "tturl-common-v1.schema.json#/$defs/completion"
+        },
+        "execution": {
+          "$ref": "#/$defs/execution"
+        },
+        "analysis": {
+          "$ref": "#/$defs/analysis"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Terminal acquisition completion and observed execution, plus command-owned aggregates or inference."
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/tantosec/tturl/main/cmd/tturl/doc/schemas/tturl-analyse-v1.schema.json"
+}

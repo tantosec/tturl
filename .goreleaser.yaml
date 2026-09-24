@@ -1,0 +1,75 @@
+# GoReleaser configuration — builds tturl archives and checksums for the modern
+# platform matrix. The release workflow verifies them before a separate
+# least-privilege job publishes them to a GitHub Release.
+#
+# The release workflow (.github/workflows/release.yaml) runs this on a pushed
+# `v*` tag. To exercise it locally:
+#   make release-snapshot  # full matrix dry run; nothing is published
+version: 2
+
+project_name: tturl
+
+builds:
+  - id: tturl
+    main: ./cmd/tturl
+    binary: tturl
+    env:
+      - CGO_ENABLED=0 # pure Go; static binaries, clean cross-compilation
+    flags:
+      - -trimpath # strip local filesystem paths for reproducible builds
+    ldflags:
+      # -s -w drop the symbol table and DWARF for a smaller binary (Go's panic
+      # stack traces still work). A release injects its tag; every build injects
+      # full source provenance. Snapshots omit a release and therefore identify
+      # as development builds.
+      - >-
+        {{ if .IsSnapshot }}-s -w{{ else }}-s -w
+        -X github.com/tantosec/tturl/internal/buildinfo.injectedRelease={{ .Tag }}{{ end }}
+      - -X github.com/tantosec/tturl/internal/buildinfo.injectedRevision={{ .FullCommit }}
+      - -X github.com/tantosec/tturl/internal/buildinfo.injectedTree={{ .GitTreeState }}
+    mod_timestamp: '{{ .CommitTimestamp }}' # reproducible builds
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    builds_info:
+      owner: root
+      group: root
+      mtime: '{{ .CommitDate }}'
+    files:
+      - src: LICENSE
+        info:
+          owner: root
+          group: root
+          mode: 0644
+          mtime: '{{ .CommitDate }}'
+      - src: CITATION.cff
+        info:
+          owner: root
+          group: root
+          mode: 0644
+          mtime: '{{ .CommitDate }}'
+      - src: THIRD_PARTY_LICENSES
+        info:
+          owner: root
+          group: root
+          mode: 0644
+          mtime: '{{ .CommitDate }}'
+    format_overrides:
+      - goos: windows
+        formats: [zip] # Windows users expect .zip
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  disable: true

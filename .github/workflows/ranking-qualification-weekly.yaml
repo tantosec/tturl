@@ -1,0 +1,236 @@
+# Independent monitoring of the release qualification plan. Scheduled windows
+# are allocated prospectively from the immutable workflow run ID. A rerun uses
+# the same window and therefore cannot erase the original result.
+name: ranking qualification weekly
+
+on:
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+    inputs:
+      seed_start:
+        description: First seed of the exact 3,000-seed replay window
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  GO_MINIMUM_VERSION: '1.26.6'
+
+concurrency:
+  group: ranking-qualification-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    name: Plan independent campaign
+    outputs:
+      shards: ${{ steps.plan.outputs.shards }}
+      artefact-id: ${{ steps.plan.outputs.artefact-id }}
+      seed-start: ${{ steps.plan.outputs.seed-start }}
+      seed-end: ${{ steps.plan.outputs.seed-end }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_MINIMUM_VERSION }}
+          check-latest: true
+          cache-dependency-path: |
+            go.mod
+            go.sum
+
+      - name: Allocate and validate seed window
+        id: plan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_SEED_START: ${{ inputs.seed_start }}
+          WORKFLOW_RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          case "$EVENT_NAME" in
+            schedule)
+              output="$(make --silent ranking-qualification-campaign-plan \
+                RANKING_CAMPAIGN_RUN_ID="$WORKFLOW_RUN_ID")"
+              ;;
+            workflow_dispatch)
+              if [[ ! "$INPUT_SEED_START" =~ ^[0-9]+$ ]]; then
+                echo "seed_start must be an unsigned decimal integer" >&2
+                exit 1
+              fi
+              output="$(make --silent ranking-qualification-campaign-plan \
+                RANKING_CAMPAIGN_SEED_START="$INPUT_SEED_START")"
+              ;;
+            *)
+              echo "unsupported event: $EVENT_NAME" >&2
+              exit 1
+              ;;
+          esac
+          printf '%s\n' "$output"
+
+          extract() {
+            key="$1"
+            printf '%s\n' "$output" | sed -n "s/^${key}=//p"
+          }
+          shards="$(extract qualification-shards)"
+          artefact_id="$(extract qualification-artefact-id)"
+          seed_start="$(extract qualification-campaign-seed-start)"
+          seed_end="$(extract qualification-campaign-seed-end)"
+          shard_pattern='^\["[a-z0-9-]+"(,"[a-z0-9-]+")*\]$'
+          if [[ ! "$shards" =~ $shard_pattern ]]; then
+            echo "invalid qualification shard list: $shards" >&2
+            exit 1
+          fi
+          if [[ ! "$artefact_id" =~ ^[a-z0-9-]+$ ]]; then
+            echo "invalid qualification artefact ID: $artefact_id" >&2
+            exit 1
+          fi
+          if [[ ! "$seed_start" =~ ^[0-9]+$ || ! "$seed_end" =~ ^[0-9]+$ ]]; then
+            echo "invalid qualification seed window: [$seed_start,$seed_end)" >&2
+            exit 1
+          fi
+          {
+            echo "shards=$shards"
+            echo "artefact-id=$artefact_id"
+            echo "seed-start=$seed_start"
+            echo "seed-end=$seed_end"
+          } >>"$GITHUB_OUTPUT"
+          echo "Campaign seed window: [$seed_start, $seed_end)" >>"$GITHUB_STEP_SUMMARY"
+
+  campaign:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    name: Independent qualification (${{ matrix.solver }})
+    strategy:
+      fail-fast: false
+      matrix:
+        solver: ${{ fromJSON(needs.plan.outputs.shards) }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_MINIMUM_VERSION }}
+          check-latest: true
+          cache-dependency-path: |
+            go.mod
+            go.sum
+
+      - name: Run independent qualification shard
+        env:
+          RANKING_EVIDENCE_DIR: ${{ runner.temp }}/ranking-qualification
+        run: |
+          mkdir -p "$RANKING_EVIDENCE_DIR"
+          make ranking-qualification-campaign \
+            RANKING_CAMPAIGN_SEED_START=${{ needs.plan.outputs.seed-start }} \
+            RANKING_QUALIFICATION_SHARD=${{ matrix.solver }} \
+            RANKING_OUTPUT="$RANKING_EVIDENCE_DIR/${{ matrix.solver }}.jsonl"
+
+      - name: Preserve independent qualification evidence
+        id: upload
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: >-
+            ranking-weekly-${{ needs.plan.outputs.artefact-id }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.solver }}
+          path: ${{ runner.temp }}/ranking-qualification/${{ matrix.solver }}.jsonl
+          if-no-files-found: error
+          compression-level: 6
+          overwrite: false
+          retention-days: 90
+
+      - name: Report shard artifact
+        if: always() && steps.upload.outcome == 'success'
+        run: |
+          {
+            echo "Solver: ${{ matrix.solver }}"
+            echo "Seed window: [${{ needs.plan.outputs.seed-start }}, ${{ needs.plan.outputs.seed-end }})"
+            echo "Artifact ID: ${{ steps.upload.outputs.artifact-id }}"
+            echo "Artifact digest: ${{ steps.upload.outputs.artifact-digest }}"
+          } >>"$GITHUB_STEP_SUMMARY"
+
+  verify:
+    if: always() && needs.plan.result == 'success'
+    needs: [plan, campaign]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    name: Verify independent campaign
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_MINIMUM_VERSION }}
+          check-latest: true
+          cache-dependency-path: |
+            go.mod
+            go.sum
+
+      - name: Download independent qualification evidence
+        uses: actions/download-artifact@v8
+        with:
+          pattern: >-
+            ranking-weekly-${{ needs.plan.outputs.artefact-id }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}-*
+          path: ${{ runner.temp }}/ranking-qualification
+          merge-multiple: true
+
+      - name: Verify complete independent campaign
+        env:
+          RANKING_EVIDENCE_DIR: ${{ runner.temp }}/ranking-qualification
+          RANKING_REPORT: ${{ runner.temp }}/ranking-qualification-report.txt
+          RANKING_SUMMARY: ${{ runner.temp }}/ranking-qualification-summary.json
+          RANKING_DISPOSITION: ${{ runner.temp }}/ranking-qualification-disposition.md
+        run: |
+          set +e
+          make ranking-qualification-verify \
+            RANKING_EVIDENCE_PATH="$RANKING_EVIDENCE_DIR" \
+            RANKING_SUMMARY_OUTPUT="$RANKING_SUMMARY" \
+            RANKING_DISPOSITION_OUTPUT="$RANKING_DISPOSITION" \
+            >"$RANKING_REPORT" 2>&1
+          status="$?"
+          set -e
+          cat "$RANKING_REPORT"
+          {
+            echo "## Independent ranking qualification"
+            echo
+            echo "Source: $GITHUB_SHA"
+            echo "Plan: ${{ needs.plan.outputs.artefact-id }}"
+            echo "Seed window: [${{ needs.plan.outputs.seed-start }}, ${{ needs.plan.outputs.seed-end }})"
+            echo
+            echo '```text'
+            cat "$RANKING_REPORT"
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
+      - name: Preserve integrated campaign summary
+        id: upload
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: >-
+            ranking-weekly-${{ needs.plan.outputs.artefact-id }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}-summary
+          path: |
+            ${{ runner.temp }}/ranking-qualification-summary.json
+            ${{ runner.temp }}/ranking-qualification-disposition.md
+          if-no-files-found: error
+          compression-level: 6
+          overwrite: false
+          retention-days: 90
+
+      - name: Report integrated artifact
+        if: always() && steps.upload.outcome == 'success'
+        run: |
+          echo "Integrated artifact ID: ${{ steps.upload.outputs.artifact-id }}" >>"$GITHUB_STEP_SUMMARY"
+          echo "Integrated artifact digest: ${{ steps.upload.outputs.artifact-digest }}" >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Require successful campaign shards
+        if: always()
+        env:
+          CAMPAIGN_RESULT: ${{ needs.campaign.result }}
+        run: test "$CAMPAIGN_RESULT" = success

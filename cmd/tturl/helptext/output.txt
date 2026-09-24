@@ -1,0 +1,242 @@
+Each request command's primary output is a report. Read its request, design,
+result, response, and execution evidence together. A written report, completed
+acquisition, command finding, and vulnerability finding are different facts.
+
+## Output channels
+
+The primary report goes to stdout. '--output' (or '-o') FILE writes it to a
+file. Use '-o' - to select stdout explicitly. '--report' text is the default.
+'--report' json selects the command's versioned machine-readable JSON Lines
+format: a line stream, rather than one JSON document.
+
+Only the primary report uses that destination. Notices, warnings, request
+previews used with JSON, and progress remain on stderr, so a pipeline can parse
+stdout while you still see operational feedback.
+
+For example:
+
+  tturl measure -k --report json \
+    --block 'https://127.0.0.1:8443/sleep?duration=100us' --name fast \
+    --block 'https://127.0.0.1:8443/sleep?duration=5000us' --name slow \
+    > measurement.jsonl
+
+Use '-o' measurement.jsonl when stdout has another purpose. Do not merge stderr
+into a machine-readable report.
+
+## Suppress diagnostics
+
+'-s' and '--silent' are equivalent switches. They suppress all tturl-authored
+stderr output: progress, errors, warnings, notices, request echoes and previews,
+and utility or demo-server diagnostics. Exit statuses and command errors retain
+their meanings. Silent runs still send target traffic and create, truncate and
+close selected output files normally.
+
+These are bare switches on every command. Attached values such as
+'--silent=false' are argument errors.
+
+Reports retain their evidence, cautions, failure facts and completion state.
+Explicit help, version, completion and schema output keep their usual
+destinations. JSON argv retains silent switches in their original positions.
+Dry-run previews keep their existing stdout or '--output' file destination.
+Request previews routed to stderr are suppressed.
+
+For request commands, put silent after the command and before the first
+'--block', including after a bare preamble URL. It is invalid inside a block or
+before the command. tturl schema accepts it before or after the subject. tturl
+demo-server accepts it with its other options. tturl help and tturl completion
+accept a leading sequence before the topic, shell or help selector; tturl
+version accepts that sequence and no operands. Repetition is harmless. The
+switches take no value; there is no option to re-enable diagnostics.
+
+Once selected in a valid option position, silent also suppresses argument-error
+diagnostics and usage. A misplaced switch does not select silent. Root command
+errors and standalone root help/version selectors keep their existing grammar.
+
+## Preview without network access
+
+'--dry-run' builds and prints the network-free portion of a request command's
+resolved text plan, then exits successfully. It reads local request inputs and
+shows the Experiment and Requests sections without DNS, path fitting, dialling,
+TLS setup, key logs, priming, or measured requests. It proves no peer stream
+limit. A required automatic path fit and its connection-dependent totals remain
+explicitly unresolved until execution.
+
+Dry run accepts only '--report text'. An '--output' path is opened after static
+validation and request materialisation, creating or truncating that file. The
+preview is not an execution record and does not authorise or cache a later run.
+
+## Understand file writes
+
+A non-'-' output path is opened once, creating it or truncating its previous
+contents. tturl race, tturl measure and tturl analyse open it after delivery
+resolution, including fitting. tturl detect opens it before automatic fitting.
+tturl time opens it after request materialisation and static allocation. Fitting
+can contact the target before measured collection. For opening order:
+
+  tturl help json
+
+The file is not written atomically. Any later failure can leave an empty or
+partial artefact. File existence therefore proves neither successful completion
+nor a usable result. Preserve the report, stderr and exit status.
+
+## Read the text report in order
+
+Requests shows the resolved request set after inheritance and expansion. Check
+it first. '--verbose' (or '-v') replaces the compact request summary with
+resolved pseudo-headers, request fields, and complete non-empty bodies,
+including sensitive values.
+
+Experiment shows the resolved workload, arrangement, warmups, pacing,
+connections, stream policy, positional padding, body release, and TLS
+verification. Distinct priming work and requests are separated from measured
+evidence. Warnings and related stderr diagnostics describe run conditions.
+
+The command-specific result follows. tturl race shows individual trials. tturl
+measure describes ranks. tturl analyse reports a fixed test, while tturl detect
+reports an adaptive outlier decision. Its configured prospective error risks are
+separate from the observed log evidence and threshold. For detect, the Padding
+line records the complete position-indexed schedule used by evidence-bearing
+comparisons; distinct priming requests are unpadded. The 'Response limits' line
+records the accepted body ceiling per stream and transport-time ceiling per
+batch attempt for comparison and priming work.
+
+Rank 0 is the first response arrival. A larger mean rank means that more peers
+arrived first, not that tturl measured elapsed response time.
+
+HTTP status outcomes describe the responses that supplied ranks. Unexpected or
+changing statuses remain evidence but receive a review note. Use tturl race when
+response-level evidence must validate the operation.
+
+Where present, Position check asks whether outbound position tracked arrival
+rank. Execution reconciles the plan with attempted, rank-complete, retained,
+excluded, and unattempted work. Read both before interpreting the ranking.
+
+tturl detect summarises priming batches and request operations separately.
+Rank-complete priming batches do not count successfully primed connections.
+Observed connections count recorded identities, not simultaneous capacity.
+Replacements can change connection state.
+
+tturl detect text groups failures by phase and cause, showing failed work,
+distinct recorded connections or acquisition workers, and a representative full
+error. An identity can appear in several cause groups; their populations cannot
+be summed as a unique total. Clean stops summarise cancellations by phase.
+Failed runs retain cancellation fallout alongside operational causes. JSON
+preserves individual attempts, identities, full errors
+and comparison assignments.
+
+tturl time reports duration distributions instead of ranks, with one summary per
+measured request identity. Its valid final-header population includes non-2xx
+responses and durations from partial trials or later body failures. Read tturl
+help time for its retained population, shared units and execution accounting.
+
+## Name the work and evidence
+
+A request is an identity in the constructed catalogue. Repeated batches occupy
+request operations: two requests over 300 trials produce 600 operations, while
+Requests still shows "Total: 2 requests." Fixed-command operations are logical
+occupied positions in attempted batches, not proof that all bytes reached the
+peer. Progress can include priming, failed attempts and stale-connection
+retries; its req/s rate counts those operations without changing their scope.
+
+For tturl detect, physical work counts request participations in rank-complete
+comparisons, including baselines and filler reuse. Inferential samples count
+completed comparisons while each candidate was in contention. Filler reuse after
+elimination counts physically, not as new inferential samples. Failed comparison
+operations remain separate in Execution. Physical and inferential means describe
+changing opponents; neither is a calibrated effect estimate. The cmp/s and req/s
+rates describe comparisons and request participations.
+
+Requested is the authored workload; planned is the resolved workload after
+rounding or capping. Observed qualifies concrete work or response evidence. For
+example, tturl measure with width two and three requested trials plans four
+trials, two cycles and eight measured request operations.
+
+## Complete and retained trials
+
+A trial is a batch attempt and can fail. A rank-complete trial finished without
+a batch transport error and has one relative rank for every request. Final
+headers can supply all ranks before a later reset makes the trial incomplete.
+
+Under rotation, tturl measure and tturl analyse retain only whole balanced
+cycles. A rank-complete trial is excluded if another trial prevents its cycle
+from being retained.
+
+Acquisition complete means the budget or work finished, not that every response
+succeeded or a finding was reached. tturl race can complete with failed
+individual trials. tturl detect inconclusive is a scientific non-decision,
+neither a negative finding nor an operational failure.
+
+Completeness is a transport and ranking property, not application success. A
+complete trial may contain an HTTP error response, while an interrupted run may
+still contain valid retained evidence. Read acquisition state separately from
+the command's finding or measurement state.
+
+tturl race and tturl analyse write rich trial evidence as trials complete. Their
+reports grow with completed trials even though the command need not retain every
+response object. The body capture limit bounds each retained response prefix.
+tturl race, tturl measure, and tturl analyse record separate receive and batch
+limits in Experiment. See 'tturl help delivery' for their shared contract.
+
+Each decoded response header or trailer section has a 1 MiB limit. This is a
+parser-safety limit, not a retained-evidence allowance, and it applies whether
+or not '--capture-headers' is selected. Without header capture, tturl retains
+status and any unambiguous declared Content-Length but no header or trailer map.
+
+## Capture and extract response prefixes
+
+'--capture-headers' retains headers and trailers and requires '--report' json.
+For tturl analyse, '--capture-body' also requires '--report' json. tturl race
+and tturl time accept body capture with text when '--extract-regex' is supplied.
+Extraction requires nonzero body capture and searches only the retained prefix;
+discarded response bytes cannot match. Zero or omitted capture disables
+retention. Unlimited capture retains only what the separate receive limit
+accepts; capture does not raise '--response-body-max', normally 8MiB.
+
+With the local demo server running, create a quota and extract its returned
+token using the default text report:
+
+  tturl race -k -X POST --capture-body 1KiB \
+    --extract-regex '"token":"(?P<token>[^"]+)"' \
+    https://127.0.0.1:8443/quotas
+
+'-k' accepts the local demo's test certificate. POST /quotas returns JSON
+containing a token. The named group extracts its value into a field named token:
+
+  Extract token: "example-token" in 1 response
+
+Receiving JSON from the server does not require a JSON report from tturl. Use
+the token to identify the quota at /quotas/TOKEN or /quotas/TOKEN/use. The
+illustrative token above is replaced by the value from your response.
+
+## Change presentation without changing evidence
+
+'--rank-rows' and '--pin' shorten or retain rows in measure and detect text
+tables. '--verbose' changes only the request presentation. None changes
+acquisition, the result, or evidence preserved in structured output.
+
+## Interpret exit status
+
+Exit 0 normally means the requested command completed according to its
+command-specific contract. It does not mean that tturl found a timing
+difference, a useful outlier, or a vulnerability. Exit 2 marks a classified
+command-line usage error. Exit 1 covers unavailable results and operational,
+acquisition, or output failures.
+
+A clean interruption records stopped execution. Whether it succeeds remains a
+command-specific question: an unbounded tturl race exits 0 because stopping
+fulfils its request, while a bounded run of any request command exits 1 if
+interrupted before producing its requested result. tturl detect and tturl
+analyse also record an unavailable command result.
+
+When a pipeline consumer closes stdout, tturl treats it as consumer-controlled
+termination. The arrival-order commands exit 0, including for bounded runs.
+tturl time exits 0 only for an unlimited run without an independent fatal
+failure; a bounded duration run exits nonzero. Work may stop and terminal output
+may be absent. Read the command guide and terminal state when present. Exit 0
+alone does not establish completion.
+
+## Next steps
+
+  tturl help json       Consume structured reports, states, joins, and capture
+  tturl help commands   Match each report to the question it can answer
+  tturl help design     Turn the retained evidence into a bounded conclusion

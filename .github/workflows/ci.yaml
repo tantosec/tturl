@@ -1,0 +1,379 @@
+# Fast feedback on every PR: the complete `make check` contract, split between
+# one repository-policy job and tests on both supported Go release lines; race
+# detection and govulncheck on both lines; native Windows and macOS tests plus
+# affected-change ranking qualification on the consumer floor;
+# shell-completion integration; an independent Nix package build; and a
+# cross-compiled release snapshot. Ranking qualification is delegated to its
+# cohesive reusable workflow. This workflow is also reused by release.yaml as
+# the gate a tag must pass before publishing; its real GoReleaser build makes
+# the pull-request-only snapshot redundant for tags.
+name: ci
+
+on:
+  pull_request:
+  workflow_call:
+    inputs:
+      ranking_evidence_retention_days:
+        description: Retention for ranking qualification evidence
+        required: true
+        type: number
+
+permissions:
+  contents: read
+
+env:
+  # Test the consumer floor from go.mod and the current supported release line.
+  GO_MINIMUM_VERSION: '1.26.6'
+  GO_CURRENT_VERSION: '1.27.x'
+  NODE_VERSION: '24.x'
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    name: Repository policy
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v7
+        with:
+          # Policy tools run once on the current supported toolchain. The
+          # compatibility jobs below retain compilation, tests, and
+          # vulnerability scanning on both supported Go release lines.
+          go-version: ${{ env.GO_CURRENT_VERSION }}
+          check-latest: true
+          cache-dependency-path: |
+            go.mod
+            go.sum
+            Makefile
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: .cspell/package-lock.json
+
+      - name: Install golangci-lint
+        env:
+          GOLANGCI_LINT_SHA256: 2277d43b98ec0054280f2ac26b53268bae97682444678a59a657dd565da021d6
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/golangci-lint.tar.gz"
+          install_dir="$RUNNER_TEMP/golangci-lint"
+          version="$(make --silent golangci-version)"
+          if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "invalid golangci-lint version: $version" >&2
+            exit 1
+          fi
+          archive_version="${version#v}"
+          url="https://github.com/golangci/golangci-lint/releases/download/${version}/golangci-lint-${archive_version}-linux-amd64.tar.gz"
+          curl --fail --location --silent --show-error "$url" --output "$archive"
+          echo "$GOLANGCI_LINT_SHA256  $archive" | sha256sum --check --strict
+          mkdir -p "$install_dir"
+          tar --extract --gzip --file "$archive" --directory "$install_dir" \
+            --strip-components=1
+          observed="$("$install_dir/golangci-lint" version)"
+          case "$observed" in
+            *"version $archive_version "*) ;;
+            *) echo "unexpected golangci-lint version: $observed" >&2; exit 1 ;;
+          esac
+          echo "$observed"
+          echo "$install_dir" >>"$GITHUB_PATH"
+
+      - name: Check repository policy
+        # CI supplies the checksum-verified release binary; the Makefile keeps
+        # its pinned `go run` command as the portable local fallback. The
+        # target owns repository-policy membership for both local and CI use.
+        run: make policy-check GOLANGCI=golangci-lint
+
+  compatibility-minimum:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    name: Go minimum compatibility
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v7
+        with:
+          # go.mod owns the consumer floor. CI uses the newest patch of each
+          # supported release line so it never builds with a known-stale .0.
+          go-version: ${{ env.GO_MINIMUM_VERSION }}
+          check-latest: true
+          cache-dependency-path: |
+            go.mod
+            go.sum
+
+      - name: Check Go compatibility
+        # Scan with each supported toolchain because standard-library findings
+        # depend on the Go version on PATH.
+        run: make compatibility-check
+
+  race-minimum:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    name: Go minimum race
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_MINIMUM_VERSION }}
+          check-latest: true
+          cache-dependency-path: |
+            go.mod
+            go.sum
+
+      - name: Race
+        # Keep race execution parallel with the other Go gates. The stable
+        # aggregate below still requires both jobs.
+        run: make race
+
+  windows-macos:
+    name: Go minimum (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v7
+        with:
+          # The supported-OS claim must hold at the declared consumer floor.
+          # Linux separately tests the current Go release line.
+          go-version: ${{ env.GO_MINIMUM_VERSION }}
+          check-latest: true
+          cache-dependency-path: |
+            go.mod
+            go.sum
+
+      - name: Test
+        run: go test ./...
+
+  go-minimum:
+    if: always()
+    needs:
+      [policy, compatibility-minimum, race-minimum, windows-macos,
+       ranking-qualification]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    name: Go minimum
+    steps:
+      - name: Require every Go minimum gate
+        env:
+          POLICY_RESULT: ${{ needs.policy.result }}
+          COMPATIBILITY_RESULT: ${{ needs.compatibility-minimum.result }}
+          RACE_RESULT: ${{ needs.race-minimum.result }}
+          WINDOWS_MACOS_RESULT: ${{ needs.windows-macos.result }}
+          QUALIFICATION_RESULT: ${{ needs.ranking-qualification.result }}
+        run: |
+          test "$POLICY_RESULT" = success
+          test "$COMPATIBILITY_RESULT" = success
+          test "$RACE_RESULT" = success
+          test "$WINDOWS_MACOS_RESULT" = success
+          test "$QUALIFICATION_RESULT" = success
+
+  compatibility-current:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    name: Go current compatibility
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_CURRENT_VERSION }}
+          check-latest: true
+          cache-dependency-path: |
+            go.mod
+            go.sum
+
+      - name: Check Go compatibility
+        run: make compatibility-check
+
+  race-current:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    name: Go current race
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_CURRENT_VERSION }}
+          check-latest: true
+          cache-dependency-path: |
+            go.mod
+            go.sum
+
+      - name: Race
+        run: make race
+
+  ranking-qualification:
+    name: Ranking qualification
+    uses: ./.github/workflows/ranking-qualification.yaml
+    with:
+      go_version: '1.26.6'
+      evidence_retention_days: >-
+        ${{ github.event_name == 'pull_request' && 14 ||
+            inputs.ranking_evidence_retention_days }}
+
+  go-current:
+    if: always()
+    needs: [policy, compatibility-current, race-current,
+            ranking-qualification]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    name: Go current
+    steps:
+      - name: Require every Go current gate
+        env:
+          POLICY_RESULT: ${{ needs.policy.result }}
+          COMPATIBILITY_RESULT: ${{ needs.compatibility-current.result }}
+          RACE_RESULT: ${{ needs.race-current.result }}
+          QUALIFICATION_RESULT: ${{ needs.ranking-qualification.result }}
+        run: |
+          test "$POLICY_RESULT" = success
+          test "$COMPATIBILITY_RESULT" = success
+          test "$RACE_RESULT" = success
+          test "$QUALIFICATION_RESULT" = success
+
+  shell-completions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    name: Shell completions
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_CURRENT_VERSION }}
+          check-latest: true
+          cache-dependency-path: |
+            go.mod
+            go.sum
+
+      - name: Install completion shells
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends fish zsh
+
+      - name: Check generated completion scripts
+        run: make shell-completion-test
+
+  nix:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - system: aarch64-darwin
+            os: macos-latest
+          - system: aarch64-linux
+            os: ubuntu-24.04-arm
+          - system: x86_64-linux
+            os: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    name: Nix (${{ matrix.system }})
+    steps:
+      - uses: actions/checkout@v6
+
+      # The flake lock, rather than a channel configured on the runner, owns
+      # the Nixpkgs revision.
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ github.token }}
+
+      - name: Check committed Nix state
+        # The repository-policy job proves the Go-native dependency manifest.
+        run: make nix-native-check
+
+  release-archives:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    name: Release archives
+    env:
+      GORELEASER_BIN: goreleaser
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_CURRENT_VERSION }}
+          check-latest: true
+          cache-dependency-path: |
+            go.mod
+            go.sum
+            Makefile
+            .goreleaser.yaml
+            scripts/goreleaser.sh
+
+      # Install only: repository-owned commands retain --skip=publish, and
+      # this job has no write permission. The action verifies the downloaded
+      # archive against GoReleaser's published checksums.
+      - name: Install GoReleaser
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: v2.17.0
+          install-only: true
+
+      - name: Detect release-intent change
+        id: release-intent
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git diff --name-only -z "$BASE_SHA" -- |
+            go run ./tools/ciimpact release-intent >>"$GITHUB_OUTPUT"
+
+      - name: Check release-preparation rollback
+        run: make release-prepare-rollback-test
+
+      - name: Build development snapshot
+        if: steps.release-intent.outputs.changed != 'true'
+        run: make release-snapshot
+
+      - name: Rehearse release-only path
+        if: steps.release-intent.outputs.changed == 'true'
+        run: make release-rehearse VERSION="$(tr -d '\n' <release/version.txt)"
+
+  release-container:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    name: Release container
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build and smoke-test tturl container
+        env:
+          CONTAINER_REVISION: ${{ github.sha }}
+          CONTAINER_TREE: clean
+        run: make container-check
+
+  # Keep the protected status stable while allowing its two independent,
+  # unprivileged release proofs to use separate runners. This aggregate must
+  # fail closed when either child fails, is cancelled, or does not run.
+  release-snapshot:
+    if: always() && github.event_name == 'pull_request'
+    needs: [release-archives, release-container]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    name: Release snapshot
+    steps:
+      - name: Require every release snapshot gate
+        env:
+          ARCHIVES_RESULT: ${{ needs.release-archives.result }}
+          CONTAINER_RESULT: ${{ needs.release-container.result }}
+        run: |
+          test "$ARCHIVES_RESULT" = success
+          test "$CONTAINER_RESULT" = success

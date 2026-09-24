@@ -1,0 +1,214 @@
+version: "0.2"
+language: en-AU
+import:
+  - './.cspell/node_modules/@cspell/dict-en-au/cspell-ext.json'
+  - './.cspell/node_modules/@cspell/dict-docker/cspell-ext.json'
+  - './.cspell/node_modules/@cspell/dict-golang/cspell-ext.json'
+  - './.cspell/node_modules/@cspell/dict-makefile/cspell-ext.json'
+  - './.cspell/node_modules/@cspell/dict-shell/cspell-ext.json'
+  - './.cspell/node_modules/@cspell/dict-software-terms/cspell-ext.json'
+useGitignore: true
+dictionaryDefinitions:
+  - name: tturl
+    path: ./.cspell/project-words.txt
+    description: Repository-wide names and vocabulary
+    type: S
+    supportNonStrictSearches: true
+dictionaries:
+  - tturl
+ignorePaths:
+  - /.git
+  - /.cspell/**
+  - /LICENSE
+  - /THIRD_PARTY_LICENSES
+  - /go.sum
+  - /flake.lock
+  - /govendor.toml
+  - '**/package-lock.json'
+  - /doc/recordings/*.gif
+  - /.cspell.config.yaml
+overrides:
+  # Canonical operating-system API constant in the process stdin adapter.
+  - filename: cmd/tturl/stdin_process_unix.go
+    words: [POLLIN]
+  # Explicit base64 body data is opaque; surrounding example prose is checked.
+  - filename: cmd/tturl/doc/schemas/examples/*.jsonl
+    ignoreRegExpList:
+      - '/"encoding"\s*:\s*"base64"\s*,\s*"data"\s*:\s*"[A-Za-z0-9+/=]*"/g'
+  # GitHub Actions owns "artifact"; project prose and source use "artefact".
+  - filename:
+      - '**/*.{go,md,txt,sh}'
+      - '**/Makefile'
+    flagWords:
+      - 'artifact: artefact'
+      - 'artifacts: artefacts'
+  # Exact tool and expression-language tokens in repository configuration.
+  - filename: .github/workflows/*.yaml
+    words: [argjson, rawfile]
+  - filename: .golangci.yaml
+    words:
+      - bidichk
+      - bodyclose
+      - canonicalheader
+      - durationcheck
+      - errcheck
+      - errchkjson
+      - errorlint
+      - fatcontext
+      - formatters
+      - gocheckcompilerdirectives
+      - godoc
+      - govet
+      - ineffassign
+      - makezero
+      - nilnesserr
+      - noctx
+      - nolintlint
+      - nosprintfhostport
+      - wastedassign
+  # Synthetic parser and wire tokens are meaningful only inside their tests.
+  - filename: internal/curlblocks/**/*_test.go
+    words:
+      - ABCXY
+      - BADBADBA
+      - blockxxxxxxxx
+      - cdef
+      - CNAMETOK
+      - cret
+      - CVALTOK
+      - DATATOK
+      - defghijklmnopqrstuvwxyz
+      - FFILETOK
+      - FNAMETOK
+      - FTYPETOK
+      - FVALTOK
+      - HNAMETOK
+      - HVALTOK
+      - JSONTOK
+      - kool
+      - METHODTOK
+      - myuser
+      - Nlcjo
+      - Nlcjpw
+      - noequals
+      - notafile
+      - NOTEDATA
+      - SUPPRESSTOK
+      - unknownext
+      - URLTOK
+      - Zabcxyz
+  - filename: internal/termline/**/*_test.go
+    words: [xffllo]
+  - filename: internal/h2tls/**/*_test.go
+    words: [notadir]
+  - filename: tth2/**/*_test.go
+    words: [bcher, defghijklmnopqrstuvwxyz, mnchen, testboundary]
+  # Exact external output and recording-tool vocabulary.
+  - filename: README.md
+    words: [mdev]
+  - filename: doc/recordings/{Makefile,*.tape}
+    words: [colors, GIFSICLE, gifsicle, INPUTRC, optimize, RPORT]
+flagWords:
+  - 'afterward: afterwards'
+  - 'amortize: amortise'
+  - 'amortized: amortised'
+  - 'amortizes: amortises'
+  - 'amortizing: amortising'
+  - 'analyze: analyse'
+  - 'analyzed: analysed'
+  - 'analyzes: analyses'
+  - 'analyzing: analysing'
+  - 'authorized: authorised'
+  - 'authorizes: authorises'
+  - 'behavior: behaviour'
+  - 'behavioral: behavioural'
+  - 'behaviors: behaviours'
+  - 'catalog: catalogue'
+  - 'catalogs: catalogues'
+  - 'cataloged: catalogued'
+  - 'cataloging: cataloguing'
+  - 'dialed: dialled'
+  - 'dialing: dialling'
+  - 'enrollment: enrolment'
+  - 'equalizes: equalises'
+  - 'equalize: equalise'
+  - 'equalized: equalised'
+  - 'equalizing: equalising'
+  - 'favorable: favourable'
+  - 'finalize: finalise'
+  - 'finalized: finalised'
+  - 'finalizes: finalises'
+  - 'finalizing: finalising'
+  - 'honor: honour'
+  - 'honors: honours'
+  - 'honored: honoured'
+  - 'honoring: honouring'
+  - 'localization: localisation'
+  - 'localize: localise'
+  - 'localized: localised'
+  - 'localizes: localises'
+  - 'localizing: localising'
+  - 'materialize: materialise'
+  - 'materialized: materialised'
+  - 'materializes: materialises'
+  - 'materializing: materialising'
+  - 'maximizes: maximises'
+  - 'maximized: maximised'
+  - 'maximizing: maximising'
+  - 'minimizes: minimises'
+  - 'minimized: minimised'
+  - 'minimizing: minimising'
+  - 'modeled: modelled'
+  - 'modeling: modelling'
+  - 'normalize: normalise'
+  - 'normalized: normalised'
+  - 'normalizes: normalises'
+  - 'normalizing: normalising'
+  - 'normalization: normalisation'
+  - 'optimization: optimisation'
+  - 'parameterized: parameterised'
+  - 'parameterize: parameterise'
+  - 'parameterizes: parameterises'
+  - 'parameterizing: parameterising'
+  - 'quantization: quantisation'
+  - 'quantized: quantised'
+  - 'randomized: randomised'
+  - 'randomize: randomise'
+  - 'randomizes: randomises'
+  - 'randomizing: randomising'
+  - 'randomization: randomisation'
+  - 'randomizations: randomisations'
+  - 'recognizable: recognisable'
+  - 'recognizes: recognises'
+  - 'recognize: recognise'
+  - 'recognized: recognised'
+  - 'recognizing: recognising'
+  - 'sanitize: sanitise'
+  - 'sanitized: sanitised'
+  - 'sanitizes: sanitises'
+  - 'sanitizing: sanitising'
+  - 'sanitization: sanitisation'
+  - 'serialize: serialise'
+  - 'serialized: serialised'
+  - 'serializes: serialises'
+  - 'serializing: serialising'
+  - 'serialization: serialisation'
+  - 'signaling: signalling'
+  - 'stabilize: stabilise'
+  - 'stabilized: stabilised'
+  - 'stabilizes: stabilises'
+  - 'stabilizing: stabilising'
+  - 'summarize: summarise'
+  - 'summarized: summarised'
+  - 'summarizes: summarises'
+  - 'summarization: summarisation'
+  - 'synchronization: synchronisation'
+  - 'synchronize: synchronise'
+  - 'synchronized: synchronised'
+  - 'synchronizes: synchronises'
+  - 'synchronizing: synchronising'
+  - 'synthesize: synthesise'
+  - 'synthesized: synthesised'
+  - 'synthesizes: synthesises'
+  - 'synthesizing: synthesising'
+  - 'unrecognized: unrecognised'

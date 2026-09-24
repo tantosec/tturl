@@ -1,0 +1,258 @@
+This guide describes the arrival-order commands. tturl time uses one active
+request per connection and separate delivery and timeout controls. Read tturl
+help time for that contract.
+
+Delivery settings control how many batches overlap, when they start, and how
+body-bearing requests reach their final release. They can shorten a run, bound
+offered load, or change the signal itself.
+
+Start with one connection at a modest rate. A result obtained under greater load
+is a result about that load condition.
+
+## Connections
+
+Each connection sends one batch at a time and waits for it to finish before
+starting another. A distant or slow target can therefore keep one connection
+occupied for much of a round trip.
+
+'--connections' N permits up to N connections, each still carrying only one
+active batch. More connections overlap round-trip waiting, but also add
+concurrent TCP and TLS setup, warmups, requests, and target contention. Without
+a selector, tturl uses up to one connection regardless of rates.
+
+## Prime connection-local state
+
+'--warmup' N makes N priming attempts on every initial connection before that
+connection accepts measured work. A worker proceeds as soon as its own
+connection is primed; warmup is rolling, not a run-wide barrier. A replacement
+connection repeats the complete sequence before it contributes evidence.
+
+For tturl race, tturl measure, and tturl analyse, warmups use the measured batch
+and its arrangement and positional padding unless at least one block is marked
+'--warmup-only'. tturl detect requires a distinct marked batch when '--warmup'
+is positive. It never selects candidates for priming. Marked blocks form the
+priming batch; unmarked blocks form the measured or candidate set. Roles are
+resolved after inheritance and expansion.
+
+Distinct priming requires positive '--warmup' and at least one request in each
+of the priming and measured or candidate sets. All requests share one origin.
+
+A distinct priming batch runs in authored order, without arrangement or
+positional padding. Configured pacing, peer stream limits, TLS, body release,
+and capture still apply during priming.
+
+tturl detect applies its resolved positional padding only to evidence-bearing
+comparisons. Candidate identities, including eliminated fillers, are assigned
+uniformly to outbound positions before the position-indexed schedule is applied.
+
+The resolved response-body and batch-time limits apply equally to distinct
+priming and evidence-bearing comparisons.
+
+Priming attempts and request operations are reported separately and never enter
+measured trial, cycle or comparison budgets, ranks or inferential samples. A
+nonfatal incomplete priming attempt consumes one attempt. Commands replace a
+connection after a connection-fatal attempt and prime the replacement. tturl
+detect permits one replacement per adaptive worker and does not retry an
+evidence-bearing comparison. Reports preserve incomplete attempts and stop if
+replacement acquisition fails.
+
+Priming is part of the experiment, not neutral housekeeping. A priming request
+may be unrepresentative or mutate caches, sessions, quotas, rate limits, or
+other shared state. Inspect those effects. After exploratory changes to a
+priming design, collect fresh evidence for an inferential run.
+
+## Pace offered work
+
+Both '--batch-rate-max' and '--request-rate-max' accept N/UNIT or unlimited.
+Omission defaults to unlimited. N is a positive integer; UNIT is s seconds, m
+minutes, h hours or d days. Fractional and signed counts are invalid.
+
+'--batch-rate-max' limits whole-batch starts. A limit of 20/s requires at least
+50ms between starts. '--request-rate-max' limits request operations by waiting
+between batches according to the upcoming batch's width. Requests within a batch
+stay together. Both limits can be used; the more restrictive rate wins.
+
+For five requests per batch, '--batch-rate-max' 10/s allows a 100ms gap.
+'--request-rate-max' 25/s requires 200ms. Together, 200ms wins. One unlimited
+control leaves the other finite control in effect; both unlimited remove pacing.
+
+The first batch is immediately eligible. The gate sits after a connection
+becomes available and immediately before the batch's first HTTP/2 flush. Priming
+and retried sends are paced; handshakes and PINGs are not charged. Upcoming
+priming batches use their own width for request pacing. Missed allowances do not
+accumulate, and there are no catch-up bursts.
+
+These are maximum offered rates, not promised activity rates or strict quotas
+over every arbitrary one-second window. A slow target, failed connection,
+blocked output consumer or busy client can lower the actual rate.
+
+## Bound response work
+
+'--run-timeout' DURATION places one wall-clock ceiling on live target
+interaction. It defaults to 'unlimited'. A positive Go duration covers path
+fitting, connection acquisition, priming, measured batches, replacements, and
+connection disposal. It does not cover request construction, offline analysis,
+terminal reporting, or total process lifetime. The run and batch timeouts are
+independent; neither must exceed the other.
+
+Expiry stops new work, cancels work in flight, and produces the distinct
+completion code run_timeout with a nonzero exit status. Completed batches remain
+evidence. Caller cancellation, caller deadlines, per-batch timeout, response
+limits, and transport failures retain their own classifications.
+
+'--response-body-max' SIZE caps accepted response DATA on each stream. It
+defaults to 8 MiB. SIZE is a positive integer with an optional B, KiB, MiB, or
+GiB suffix. The case-insensitive value 'unlimited' removes this limit.
+
+'--batch-timeout' DURATION limits one batch attempt to a positive Go duration.
+It defaults to 30s. The timer starts immediately before transport dispatch and
+covers request sending, release delay, response headers, bodies, and trailers.
+The case-insensitive value 'unlimited' removes this limit. A finite timeout must
+exceed the configured release delay.
+
+Priming and measured batches use the same limits. Crossing either limit fails
+the whole batch without response facts or ranks. tturl race, tturl measure, and
+tturl analyse close that connection; later work uses a fresh connection and
+primes it again when configured. tturl detect instead discards the connection
+and stops without retry, replacement priming, or ranks from another comparison
+in the incomplete adaptive wave. The report identifies response_body_limit and
+batch_timeout separately from peer stream resets and other transport failures.
+
+'--capture-body' is independent. It controls only the response prefix retained
+as evidence. Its 'unlimited' value retains all bytes accepted below the receive
+limit; it does not remove '--response-body-max', normally 8MiB. Zero or omitted
+capture disables retention. Extraction searches only a retained prefix. See:
+
+  tturl help output
+
+The response limits bound accepted work per response stream and transport time
+per batch. They do not bound aggregate memory, target work already performed, or
+response timing evidence. A finite trial, cycle, or comparison count still
+bounds planned work rather than wall-clock duration. Preserve an interrupted or
+partial report as evidence. See:
+
+  tturl help design
+  tturl help output
+
+## Choose automatic connection fitting
+
+'--connections-fit' explicitly selects automatic connection fitting. It requires
+at least one finite pacing limit: '--batch-rate-max' or '--request-rate-max'.
+Either option alone qualifies. One unlimited option leaves the other finite
+limit in effect. Setting both to unlimited, or omitting both, does not qualify.
+Rates alone only pace work with up to one connection.
+
+The fitting selector conflicts with '--connections', even when the fixed
+capacity is one. '--connections-fit-max' requires the fitting selector; a cap
+never selects fitting by itself.
+
+With fitting selected, tturl measure, tturl analyse and tturl detect open TLS
+and send three HTTP/2 PINGs before choosing connections. tturl race does the
+same unless its resolved workload is exactly one measured trial. Fitting and its
+cap are inactive for that workload. Priming does not activate fitting; rotation
+that resolves to several trials is eligible. The largest observed path RTT
+selects a pool with 25% headroom and at least one extra connection.
+
+The fit uses measured batch width and the more restrictive batch-start interval
+from both rates. A wider priming batch keeps its own request-rate wait and does
+not shrink the measurement pool. Resource review and peer checks still use the
+larger measured or active priming width. For two requests, '--request-rate-max'
+12/s allows starts about 167ms apart. A request ceiling alone can therefore size
+the selected fit.
+
+PING may end at an intermediary and does not invoke an HTTP handler. The fit
+therefore knows path delay, not server work, and is fixed before acquisition. A
+rough manual estimate for batch rate B, path RTT R, and server work S is:
+
+  connections = ceil(B * (R + S))
+
+An explicit '--connections-fit-max' records that you reviewed how many
+connections automatic fitting may use. A positive N caps the fitted count. tturl
+warns if the cap may prevent the requested rate. The value unlimited leaves
+fitting uncapped. Omitting the cap retains the automatic resource-review stop,
+without an invisible numerical cap.
+
+Without that option, an automatic plan stops for review if it could use more
+than 512 connections or 1,024 active request streams. Finite work narrows the
+plan before this check. These thresholds are review budgets, not assertions that
+a target can safely bear that load.
+
+Batch pacing does not pace connection establishment. Workers can create a burst
+of concurrent TCP and TLS handshakes. When warmups are configured, every
+acquired connection starts with them, including a replacement.
+
+## Release request bodies together
+
+By default, tturl withholds one trailing byte from each non-empty body.
+It sends all headers together, advances body prefixes, then releases
+those bytes with END_STREAM in one shared TLS record. Set the maximum
+tail size with '--body-bytes-withheld' N. If N reaches a non-empty
+body's length, tturl withholds that entire body.
+
+With zero, tturl chooses no fixed withheld tail or pause. It advances body
+prefixes under flow control, then completes all non-empty bodies with positive
+DATA and END_STREAM frames as soon as one shared TLS record has room and send
+credit for every remaining suffix.
+
+'--release-delay' DURATION waits after the prefixes have been transferred and
+before releasing the tails. DURATION is a non-negative Go duration such as
+500us, 5ms, or 1s. A brief delay may let server handlers reach the same body
+read. A long delay may leave those handlers blocked long enough for scheduling
+to disturb their alignment. It applies only when tturl withholds body bytes.
+
+Compare zero withholding and a positive tail when body dispatch matters.
+Add a delay only if controlled repeats improve the intended alignment.
+
+## Keep a batch intact
+
+Every request uses one HTTP/2 stream. By default, tturl honours the peer's
+advertised concurrent-stream limit. It rejects an oversized batch before
+sending headers and never splits one batch into smaller batches.
+
+'--ignore-peer-stream-limit' permits an oversized batch to exceed the advertised
+limit so you can test whether the peer enforces it. It does not increase server
+capacity or ensure that the batch completes.
+
+## TLS key logging
+
+SSLKEYLOGFILE is an environment input for TLS session secrets. Unset or empty
+disables logging. A non-empty value names a path opened for appending, creating
+it if needed. Open failure aborts live preparation. Dry-run skips key logging.
+
+These secrets can decrypt captured traffic. Treat the log as sensitive evidence.
+
+## Explore path delay locally
+
+This local exercise requires Linux or macOS because the demo-server command is
+unsupported on Windows.
+
+Start the demo server with a 200ms round-trip floor and modest jitter:
+
+  tturl demo-server --rtt 200ms --jitter 20ms
+
+Compare one fixed connection with a fitted ten-batch-per-second plan:
+
+  tturl measure -k --cycles 10 --connections 1 \
+    --block 'https://127.0.0.1:8443/sleep?duration=100us' --name fast \
+    --block 'https://127.0.0.1:8443/sleep?duration=5000us' --name slow
+
+  tturl measure -k --cycles 10 --connections-fit \
+    --batch-rate-max 10/s --connections-fit-max 8 \
+    --block 'https://127.0.0.1:8443/sleep?duration=100us' --name fast \
+    --block 'https://127.0.0.1:8443/sleep?duration=5000us' --name slow
+
+The 200ms floor, 20ms jitter cap, and 10/s ceiling are inputs, not promised
+observations or throughput.
+
+The second text report gives the largest PING RTT used for fitting and the
+fitted connection count. Structured output retains all three PING samples. For
+the limits of this focused propagation model, see:
+
+  tturl help demo-server
+
+## Next steps
+
+  tturl help design   Decide how load belongs in the experimental question
+  tturl help bodies   Apply tail-release controls to body-bearing requests
+  tturl help padding  Apply heuristic fields by outbound position
+  tturl help output   Verify the resolved delivery plan and its execution

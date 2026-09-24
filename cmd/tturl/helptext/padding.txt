@@ -1,0 +1,105 @@
+Positional padding adds synthetic request fields by outbound position. It stays
+fixed to position while request identities rotate, shuffle, or move through
+adaptive comparisons.
+
+Padding is a heuristic intervention. It can alter application behaviour, add
+variance, or under- or over-correct a position effect. A schedule does not
+establish that position bias has been removed.
+
+## Define a schedule
+
+'--padding' accepts comma-separated COMPONENT=CADENCE assignments. COMPONENT
+is query, headers, or body. A cadence is one of:
+
+  N            add N fields at every position
+  START:STEP   start with START fields at position 0, then adjust by STEP
+  -N           add (width-1)*N fields at position 0, descending to zero
+
+For a three-request batch, '--padding' query=-2 resolves to [4 2 0]. A negative
+STEP stops at zero rather than producing negative counts. Counts and starts
+must be non-negative; a step may be positive or negative.
+
+'--padding-at' POSITION:SPEC overrides selected component counts at one
+zero-based position. SPEC contains absolute COMPONENT=N assignments. Repeat
+the option to override other positions. Assign each position/component pair
+only once:
+
+  --padding 'query=-2,headers=1' --padding-at '1:query=7,headers=0'
+
+The schedule is resolved once against the measured batch width before any
+request is acquired. An override outside that width is rejected. All-zero
+schedules behave as no padding.
+
+## Understand inserted fields
+
+Query padding places _padN=x parameters before the request's existing query
+parameters. Header padding adds X-Pad-N: x fields. HTTP/2 header compression
+and field ordering may make header cost differ from the configured count.
+
+Body padding prepends fields to a JSON object, URL-encoded form, or multipart
+form. tturl rejects body padding for other body types. Body padding participates
+in the same withheld-tail and release-delay policy as authored body fields.
+
+Padding changes the request sent in a trial, not its canonical request identity
+or the concrete request record. Text and JSON reports retain the resolved count
+for every outbound position.
+
+## Relate padding to arrangement and warmups
+
+With rotate or random arrangement, padding follows outbound positions as
+request identities move. With none, identity and padding remain confounded
+because every request keeps one position.
+
+Same-batch warmups use the measured schedule and arrangement. A distinct batch
+made from '--warmup-only' blocks runs in authored order without padding. This
+keeps priming shape explicit instead of silently projecting a schedule resolved
+for another width.
+
+tturl detect resolves one schedule against its effective width and applies it
+to every evidence-bearing comparison. Eliminated peers used to fill positions
+receive the padding for their assigned outbound position. Padding is a recorded
+heuristic delivery condition; it does not remove position bias or change the
+statistical guarantee.
+
+Each padded trial still starts as one batch. Batch-rate pacing
+charges one batch start, and request-rate pacing charges the measured batch
+width; synthetic fields do not count as additional request operations. Stream
+limits apply to HTTP/2 streams, so field counts do not change batch width.
+
+## Choose and review the intervention
+
+First use fixed arrangement or position summaries to identify a plausible
+position effect. Choose one schedule before an inferential run and keep that
+schedule fixed. Do not tune during a run or pool evidence collected under
+different schedules.
+
+If exploratory evidence selected the schedule, acquire fresh evidence for
+tturl analyse. Its inference is conditional on the recorded padding and
+delivery design.
+
+Compare the report's resolved schedule with the intended cadence. Also inspect
+HTTP statuses and response shapes: padding may select different application
+paths, cache keys, validation behaviour, or request-size thresholds.
+
+## Example
+
+Apply descending query padding while requests rotate:
+
+  tturl measure -k --cycles 10 --padding 'query=-2' \
+    --block 'https://127.0.0.1:8443/sleep?duration=100us' --name fast \
+    --block 'https://127.0.0.1:8443/sleep?duration=5000us' --name slow
+
+Apply the same schedule to every width-two adaptive comparison:
+
+  tturl detect -k --direction late --padding 'query=-2' \
+    --block 'https://127.0.0.1:8443/sleep?duration=100us' --name fast \
+    --block 'https://127.0.0.1:8443/sleep?duration=5000us' --name slow
+
+This two-request schedule resolves to [2 0]. It is a deliberate experiment
+condition, not a calibration guarantee.
+
+## Next steps
+
+  tturl help delivery   Control pacing, connections, priming, and body release
+  tturl help design     Separate position effects from request identity
+  tturl help output     Verify the resolved design and execution evidence
